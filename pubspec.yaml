@@ -30,6 +30,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  connectivity_plus: ^6.1.2
 
 
   # The following adds the Cupertino Icons font to your application.
@@ -52,6 +53,10 @@ dev_dependencies:
 
 # The following section is specific to Flutter packages.
 flutter:
+  fonts:
+    - family: VollkornRegular
+      fonts:
+        - asset: assets/fonts/VollkornRegular-51aXv.ttf
 
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
