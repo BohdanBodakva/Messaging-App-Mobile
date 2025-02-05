@@ -41,7 +41,7 @@ class ChatListPageState extends State<ChatListPage> {
       appBar: AppBar(
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         title: Row(
-          mainAxisAlignment: MainAxisAlignment.center, // This ensures centering
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             GestureDetector(
               onTap: () {
@@ -260,7 +260,7 @@ class ChatItem extends StatelessWidget {
         ],
       ),
       onTap: () {
-        // Navigate to chat details or conversation page
+        
       },
     );
   }
