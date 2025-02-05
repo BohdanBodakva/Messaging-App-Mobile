@@ -1,57 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:messaging_app_mobile/pages/login.dart';
+import 'dart:async';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:messaging_app_mobile/pages/login.dart';
 
 void main() {
   runApp(const MyApp());
-}
-
-class ConnectionCheck extends StatefulWidget {
-  @override
-  _ConnectionCheckState createState() => _ConnectionCheckState();
-}
-
-class _ConnectionCheckState extends State<ConnectionCheck> {
-  late bool _isConnected = false;
-  final Connectivity _connectivity = Connectivity();
-
-  @override
-  void initState() {
-    super.initState();
-    _checkConnection();
-
-    // Listen to connectivity changes
-    _connectivity.onConnectivityChanged.listen((result) {
-      // If result is a List, check if any of the items indicate connectivity
-      setState(() {
-        if (result is List<ConnectivityResult>) {
-          _isConnected = result.contains(ConnectivityResult.wifi) || result.contains(ConnectivityResult.mobile);
-        } else {
-          _isConnected = result != ConnectivityResult.none;
-        }
-      });
-    });
-  }
-
-  Future<void> _checkConnection() async {
-    final result = await _connectivity.checkConnectivity();
-    setState(() {
-      _isConnected = result != ConnectivityResult.none;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text('Internet Connection Status')),
-      body: Center(
-        child: Text(
-          _isConnected ? 'true' : 'false',  // Display true or false based on connection status
-          style: TextStyle(fontSize: 30),
-        ),
-      ),
-    );
-  }
 }
 
 class MyApp extends StatelessWidget {
@@ -63,37 +16,92 @@ class MyApp extends StatelessWidget {
       title: 'Messaging App',
       theme: ThemeData(
         fontFamily: 'VollkornRegular',
-        colorScheme: ColorScheme.fromSeed(seedColor: Color.fromARGB(255, 54, 168, 255)),
-        // useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color.fromARGB(255, 54, 168, 255)),
       ),
-      home: ConnectionCheck(
-        // title: 'Messaging App'
-        ),
+      home: const ConnectionStatusPage(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  final String title;
+class ConnectionStatusPage extends StatefulWidget {
+  const ConnectionStatusPage({super.key});
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  ConnectionStatusPageState createState() => ConnectionStatusPageState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
+class ConnectionStatusPageState extends State<ConnectionStatusPage> {
+  bool _isConnected = true;
+  late StreamSubscription<List<ConnectivityResult>> _subscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkInitialConnection();
+    _listenToConnectionChanges();
+  }
+
+  Future<void> _checkInitialConnection() async {
+    var result = await Connectivity().checkConnectivity();
+    _updateConnectionStatus(result.first);
+  }
+
+  void _listenToConnectionChanges() {
+    _subscription = Connectivity().onConnectivityChanged.listen((result) {
+      _updateConnectionStatus(result.first);
+    });
+  }
+
+  void _updateConnectionStatus(ConnectivityResult result) {
+    setState(() {
+      _isConnected = (result == ConnectivityResult.wifi || result == ConnectivityResult.mobile);
+    });
+
+    if (!_isConnected) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const NoConnectionPage()),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _subscription.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _isConnected ? const LoginPage() : const NoConnectionPage();
+  }
+}
+
+class NoConnectionPage extends StatelessWidget {
+  const NoConnectionPage({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        title: Text(widget.title),
-        centerTitle: true,
-      ),
       body: Center(
-        child: LoginPage()
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.signal_wifi_off, size: 100, color: Colors.grey[500]),
+            const SizedBox(height: 20),
+            Text("No Internet Connection", style: TextStyle(fontSize: 20, color: Colors.grey[700])),
+            const SizedBox(height: 10),
+            Text("Please check your network settings", style: TextStyle(color: Colors.grey[600])),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: () => Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => const ConnectionStatusPage()),
+              ),
+              child: const Text("Retry"),
+            ),
+          ],
+        ),
       ),
     );
   }
