@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
+import 'package:messaging_app/providers/language_provider.dart';
+import 'package:provider/provider.dart';
 
 class NewGroupPage extends StatefulWidget {
   const NewGroupPage({super.key});
@@ -66,9 +68,11 @@ class NewGroupPageState extends State<NewGroupPage> {
 
   @override
   Widget build(BuildContext context) {
+    var languageProvider = Provider.of<LanguageProvider>(context);
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text("New Group"),
+        title: Text(languageProvider.localizedStrings['newGroup'] ?? "New Group"),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         centerTitle: true,
         leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => Navigator.pop(context)),
@@ -84,17 +88,17 @@ class NewGroupPageState extends State<NewGroupPage> {
                   radius: 50,
                   backgroundImage: _groupImage != null
                       ? FileImage(_groupImage!) as ImageProvider
-                      : const NetworkImage("https://example.com/default_group_image.jpg"),
+                      : const AssetImage('assets/letter_images/a.png'),
                 ),
               ),
               const SizedBox(height: 10),
-              _buildTextField(_groupNameController, "Group Name"),
+              _buildTextField(_groupNameController, languageProvider.localizedStrings['groupName'] ?? "Group Name"),
               const SizedBox(height: 20),
               TextField(
                 controller: _searchController,
                 onChanged: (value) => _searchUsers(),
                 decoration: InputDecoration(
-                  labelText: "Search Users",
+                  labelText: languageProvider.localizedStrings['searchUsers'] ?? "Search Users",
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                   contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 15),
                   prefixIcon: const Icon(Icons.search),
@@ -109,7 +113,7 @@ class NewGroupPageState extends State<NewGroupPage> {
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: _createGroup,
-                  child: const Text("Create Group"),
+                  child: Text(languageProvider.localizedStrings['createGroup'] ?? "Create Group"),
                 ),
               ),
             ],
@@ -139,7 +143,7 @@ class NewGroupPageState extends State<NewGroupPage> {
       children: _selectedUsers.map((user) {
         return Chip(
           avatar: const CircleAvatar(
-            backgroundImage: NetworkImage("https://example.com/default_user_image.jpg"),
+            backgroundImage: AssetImage('assets/letter_images/a.png'),
           ),
           label: Text(user),
           deleteIcon: const Icon(Icons.close, size: 16),

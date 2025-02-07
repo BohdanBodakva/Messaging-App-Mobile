@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:messaging_app_mobile/pages/login.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:messaging_app/models/chat.dart';
+import 'package:messaging_app/models/user.dart';
+import 'package:messaging_app/pages/login.dart';
+import 'package:messaging_app/providers/language_provider.dart';
+import 'package:provider/provider.dart';
 
 void main() {
   runApp(const MyApp());
@@ -12,13 +17,30 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Messaging App',
-      theme: ThemeData(
-        fontFamily: 'VollkornRegular',
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color.fromARGB(255, 54, 168, 255)),
+    return ChangeNotifierProvider<LanguageProvider>(
+      create: (_) => LanguageProvider(),
+      child: Consumer<LanguageProvider>(
+        builder: (context, languageProvider, _) {
+          return MaterialApp(
+            locale: languageProvider.locale,
+            supportedLocales: const [
+              Locale('en', 'US'),
+              Locale('uk', 'UA'),
+            ],
+            localizationsDelegates: const [
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            title: 'Messaging App',
+            theme: ThemeData(
+              fontFamily: 'VollkornRegular',
+              colorScheme: ColorScheme.fromSeed(seedColor: const Color.fromARGB(255, 54, 168, 255)),
+            ),
+            home: const ConnectionStatusPage(),
+          );
+        },
       ),
-      home: const ConnectionStatusPage(),
     );
   }
 }
@@ -73,7 +95,24 @@ class ConnectionStatusPageState extends State<ConnectionStatusPage> {
 
   @override
   Widget build(BuildContext context) {
-    return _isConnected ? const LoginPage() : const NoConnectionPage();
+    User? currentUser;
+    List<Chat> chatList = [];
+
+    void setCurrentUser(User newUser) {
+      setState(() {
+        currentUser = newUser;
+      });
+    }
+
+    void setChatList(List<Chat> newChatList) {
+      setState(() {
+        chatList = newChatList;
+      });
+    }
+    
+    return _isConnected ? 
+      LoginPage(currentUser: currentUser, setCurrentUser: setCurrentUser) : 
+      const NoConnectionPage();
   }
 }
 
@@ -82,6 +121,10 @@ class NoConnectionPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    ModalRoute.of(context)?.addScopedWillPopCallback(() async {
+      return false;
+    });
+
     return Scaffold(
       body: Center(
         child: Column(

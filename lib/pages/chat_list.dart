@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:messaging_app_mobile/pages/chat_area.dart';
-import 'package:messaging_app_mobile/pages/group_page';
-import 'package:messaging_app_mobile/pages/user_page.dart';
+import 'package:messaging_app/pages/chat_area.dart';
+import 'package:messaging_app/pages/group_page.dart';
+import 'package:messaging_app/pages/user_page.dart';
+import 'package:messaging_app/providers/language_provider.dart';
+import 'package:provider/provider.dart';
 
 class ChatListPage extends StatefulWidget {
   const ChatListPage({super.key});
@@ -37,6 +39,8 @@ class ChatListPageState extends State<ChatListPage> {
       return false;
     });
 
+    var languageProvider = Provider.of<LanguageProvider>(context);
+
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
@@ -64,7 +68,7 @@ class ChatListPageState extends State<ChatListPage> {
               },
               child: const CircleAvatar(
                 radius: 20,
-                backgroundImage: NetworkImage('https://example.com/user_photo.jpg'),
+                backgroundImage: AssetImage('assets/letter_images/a.png'),
               ),
             ),
           ],
@@ -134,7 +138,7 @@ class ChatListPageState extends State<ChatListPage> {
                   controller: _searchController,
                   decoration: InputDecoration(
                     prefixIcon: const Icon(Icons.search, color: Colors.grey),
-                    hintText: "Search users",
+                    hintText: languageProvider.localizedStrings['searchUsers'] ?? "Search users",
                     hintStyle: const TextStyle(color: Colors.grey),
                     border: InputBorder.none,
                     contentPadding: const EdgeInsets.symmetric(vertical: 15, horizontal: 10),
@@ -194,10 +198,12 @@ class ChatItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    var languageProvider = Provider.of<LanguageProvider>(context);
+
     return ListTile(
-      leading: CircleAvatar(
+      leading: const CircleAvatar(
         radius: 30,
-        backgroundImage: NetworkImage('https://example.com/chat_image_$index.jpg'),
+        backgroundImage: AssetImage('assets/letter_images/a.png'),
       ),
       title: Text('Sender Name $index', style: const TextStyle(fontWeight: FontWeight.bold)),
       subtitle: Column(
@@ -206,14 +212,14 @@ class ChatItem extends StatelessWidget {
           Text('@username$index', style: const TextStyle(color: Colors.grey, fontSize: 12)),
           const SizedBox(height: 5),
           if (index % 2 == 0)
-            const Text(
-              'Online',
-              style: TextStyle(fontSize: 12, color: Colors.green),
+            Text(
+              languageProvider.localizedStrings['online'] ?? 'Online',
+              style: const TextStyle(fontSize: 12, color: Colors.green),
             )
           else
-            const Text(
-              '5 mins ago',
-              style: TextStyle(fontSize: 12, color: Colors.grey),
+            Text(
+              languageProvider.localizedStrings['lastSeen'] ?? '5 mins ago',
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
             ),
         ],
       ),
@@ -249,9 +255,9 @@ class ChatItem extends StatelessWidget {
                       color: Colors.blue,
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Text(
-                      'New',
-                      style: TextStyle(color: Colors.white, fontSize: 10),
+                    child: Text(
+                      languageProvider.localizedStrings['new'] ?? 'New',
+                      style: const TextStyle(color: Colors.white, fontSize: 10),
                     ),
                   ),
                 ),

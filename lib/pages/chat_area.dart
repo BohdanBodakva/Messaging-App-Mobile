@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:messaging_app_mobile/pages/chat_info_page.dart';
+import 'package:messaging_app/pages/chat_info_page.dart';
+import 'package:messaging_app/providers/language_provider.dart';
+import 'package:provider/provider.dart';
 
 class ChatPage extends StatefulWidget {
   const ChatPage({super.key});
@@ -41,12 +43,18 @@ class ChatPageState extends State<ChatPage> {
 
   void _handleSend() {
     if (_messageController.text.isNotEmpty) {
-      setState(() {
-        messages.add(_messageController.text);
-        isMyMessage.add(true);
-        _messageController.clear();
-      });
-      _scrollToBottom();
+      // Sanitize input by trimming leading/trailing newlines
+      String sanitizedMessage = _messageController.text.trim();
+      // Replace multiple consecutive Enter presses with one newline
+      sanitizedMessage = sanitizedMessage.replaceAll(RegExp(r'\n+'), '\n');
+      if (sanitizedMessage.isNotEmpty) {
+        setState(() {
+          messages.add(sanitizedMessage);
+          isMyMessage.add(true);
+          _messageController.clear();
+        });
+        _scrollToBottom();
+      }
     }
   }
 
@@ -68,6 +76,8 @@ class ChatPageState extends State<ChatPage> {
 
   @override
   Widget build(BuildContext context) {
+    var languageProvider = Provider.of<LanguageProvider>(context);
+
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
@@ -121,7 +131,7 @@ class ChatPageState extends State<ChatPage> {
               margin: const EdgeInsets.only(right: 14.0),
               child: const CircleAvatar(
                 radius: 20,
-                backgroundImage: NetworkImage('https://example.com/user_photo.jpg'),
+                backgroundImage: AssetImage('assets/letter_images/a.png'),
               ),
             )
           )
@@ -173,10 +183,12 @@ class ChatPageState extends State<ChatPage> {
                   Expanded(
                     child: TextField(
                       controller: _messageController,
-                      decoration: const InputDecoration(
-                        hintText: "Type a message...",
-                        border: OutlineInputBorder(),
-                        contentPadding: EdgeInsets.symmetric(vertical: 10, horizontal: 15),
+                      maxLines: null,
+                      keyboardType: TextInputType.multiline,
+                      decoration: InputDecoration(
+                        hintText: "${languageProvider.localizedStrings['typeMessage']}...",
+                        border: const OutlineInputBorder(),
+                        contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 15),
                       ),
                       textInputAction: TextInputAction.newline,
                       onSubmitted: (_) => _handleSend(),
@@ -216,6 +228,8 @@ class ChatMessageItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    var languageProvider = Provider.of<LanguageProvider>(context);
+
     return GestureDetector(
       onLongPress: onLongPress,
       child: Align(
@@ -228,14 +242,14 @@ class ChatMessageItem extends StatelessWidget {
             bottom: 10,
           ),
           child: Row(
-            mainAxisSize: MainAxisSize.min, // Ensures the Row fits content
+            mainAxisSize: MainAxisSize.min,
             children: [
-              if (!isMyMessage) 
+              if (!isMyMessage)
                 const CircleAvatar(
                   radius: 15,
-                  backgroundImage: NetworkImage('https://example.com/sender_photo.jpg'),
+                  backgroundImage: AssetImage('assets/letter_images/a.png'),
                 ),
-              const SizedBox(width: 8), // Add spacing between the photo and the message
+              const SizedBox(width: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
                 decoration: BoxDecoration(
@@ -247,13 +261,13 @@ class ChatMessageItem extends StatelessWidget {
                         padding: const EdgeInsets.all(8.0),
                         child: GestureDetector(
                           onTap: onDelete,
-                          child: const Row(
+                          child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.delete, color: Colors.white),
+                              const Icon(Icons.delete, color: Colors.white),
                               Text(
-                                "Delete",
-                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                languageProvider.localizedStrings['delete'] ?? "Delete",
+                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                               ),
                             ],
                           ),
@@ -271,14 +285,16 @@ class ChatMessageItem extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(height: 5),
-                          Text(
-                            message,
-                            style: TextStyle(
-                              color: isMyMessage ? Colors.white : Colors.black87,
-                              fontSize: 16,
+                          Container(
+                            constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.5),
+                            child: SelectableText(
+                              message,
+                              style: TextStyle(
+                                color: isMyMessage ? Colors.white : Colors.black87,
+                                fontSize: 16,
+                              ),
+                              maxLines: null,
                             ),
-                            maxLines: 3,
-                            overflow: TextOverflow.ellipsis,
                           ),
                         ],
                       ),

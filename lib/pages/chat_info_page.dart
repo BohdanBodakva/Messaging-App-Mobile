@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:messaging_app/providers/language_provider.dart';
+import 'package:provider/provider.dart';
 
 class ChatInfoPage extends StatelessWidget {
   const ChatInfoPage({super.key});
 
   @override
   Widget build(BuildContext context) {
+    var languageProvider = Provider.of<LanguageProvider>(context);
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text("User Info"),
+        title: Text(languageProvider.localizedStrings['userInfo'] ?? "User Info"),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         centerTitle: true,
         leading: IconButton(
@@ -21,13 +25,13 @@ class ChatInfoPage extends StatelessWidget {
           children: [
             const CircleAvatar(
               radius: 50,
-              backgroundImage: const NetworkImage("https://example.com/user_photo.jpg"),
+              backgroundImage: AssetImage('assets/letter_images/a.png'),
             ),
             const SizedBox(height: 16),
             
-            _buildInfoRow("Name", "John"),
-            _buildInfoRow("Surname", "Smith"),
-            _buildInfoRow("Username", "@john_smith"),
+            _buildInfoRow(languageProvider.localizedStrings['name'] ?? "Name", "John"),
+            _buildInfoRow(languageProvider.localizedStrings['surname'] ?? "Surname", "Smith"),
+            _buildInfoRow(languageProvider.localizedStrings['username'] ?? "Username", "@john_smith"),
 
             const SizedBox(height: 20),
 
@@ -38,7 +42,7 @@ class ChatInfoPage extends StatelessWidget {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.red,
                 ),
-                child: const Text("Delete Chat"),
+                child: Text(languageProvider.localizedStrings['deleteChat'] ?? "Delete Chat"),
               ),
             ),
           ],
@@ -61,21 +65,23 @@ class ChatInfoPage extends StatelessWidget {
   }
 
   void _showDeleteChatDialog(BuildContext context) {
+    var languageProvider = Provider.of<LanguageProvider>(context);
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Delete Chat"),
-        content: const Text("Are you sure you want to delete this chat?"),
+        title: Text(languageProvider.localizedStrings['deleteChat'] ?? "Delete Chat"),
+        content: Text(languageProvider.localizedStrings['deleteChatConfirmMessage'] ?? "Are you sure you want to delete this chat?"),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text("Cancel"),
+            child: Text(languageProvider.localizedStrings['cancel'] ?? "Cancel"),
           ),
           ElevatedButton(
             onPressed: () {
               Navigator.pop(context);
             },
-            child: const Text("Delete"),
+            child: Text(languageProvider.localizedStrings['delete'] ?? "Delete"),
           ),
         ],
       ),
