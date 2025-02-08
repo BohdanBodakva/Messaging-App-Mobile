@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:messaging_app/handlers/http_request.dart';
+import 'package:messaging_app/handlers/shared_prefs.dart';
 import 'package:messaging_app/models/user.dart';
 import 'package:messaging_app/pages/chat_list.dart';
 import 'package:messaging_app/providers/language_provider.dart';
+import 'package:messaging_app/widgets/error_message.dart';
 import 'package:provider/provider.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key, User? currentUser, setCurrentUser});
@@ -13,17 +18,65 @@ class LoginPage extends StatefulWidget {
 
 class LoginPageState extends State<LoginPage> {
   bool isLoginForm = true;
+  bool isLoading = false;
+  String error = "";
+
+  bool isNameInputValid = true;
+  bool isSurnameInputValid = true;
+  bool isUsernameInputValid = true;
+  bool isPasswordInputValid = true;
+  bool isRepeatPasswordInputValid = true;
+
+  void setNameInputValid(bool newValue) {
+    setState(() {
+      isNameInputValid = newValue;
+    });
+  }
+
+  void setSurnameInputValid(bool newValue) {
+    setState(() {
+      isSurnameInputValid = newValue;
+    });
+  }
+
+  void setUsernameInputValid(bool newValue) {
+    setState(() {
+      isUsernameInputValid = newValue;
+    });
+  }
+
+  void setPasswordInputValid(bool newValue) {
+    setState(() {
+      isPasswordInputValid = newValue;
+    });
+  }
+
+  void setRepeatPasswordInputValid(bool newValue) {
+    setState(() {
+      isRepeatPasswordInputValid = newValue;
+    });
+  }
 
   @override
   void initState() {
     super.initState();
-    
-
   }
 
   void toggleForm() {
     setState(() {
       isLoginForm = !isLoginForm;
+    });
+  }
+
+  void toggleLoading() {
+    setState(() {
+      isLoading = !isLoading;
+    });
+  }
+
+  void setError(String newError) {
+    setState(() {
+      error = newError;
     });
   }
 
@@ -35,6 +88,17 @@ class LoginPageState extends State<LoginPage> {
 
     var languageProvider = Provider.of<LanguageProvider>(context);
     String languageCode = languageProvider.locale.languageCode;
+
+    Future<Map<String, dynamic>> fetchData() async {
+      final uri = Uri.parse("http://127.0.0.1/:5000/api/a");
+      final response = await http.get(uri);
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception("Failed to load data");
+      }
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -52,7 +116,33 @@ class LoginPageState extends State<LoginPage> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  isLoginForm ? LoginForm(toggleForm: toggleForm) : SignUpForm(toggleForm: toggleForm),
+                  isLoginForm ? 
+                    LoginForm(
+                      toggleForm: toggleForm, 
+                      toggleLoading: toggleLoading,
+                      error: error, 
+                      setError: setError,
+                      isUsernameInputValid: isUsernameInputValid,
+                      setUsernameInputValid: setUsernameInputValid,
+                      isPasswordInputValid: isPasswordInputValid,
+                      setPasswordInputValid: setPasswordInputValid,
+                    ) : 
+                    SignUpForm(
+                      toggleForm: toggleForm, 
+                      toggleLoading: toggleLoading, 
+                      error: error, 
+                      setError: setError,
+                      isUsernameInputValid: isUsernameInputValid,
+                      setUsernameInputValid: setUsernameInputValid,
+                      isPasswordInputValid: isPasswordInputValid,
+                      setPasswordInputValid: setPasswordInputValid,
+                      isNameInputValid: isNameInputValid,
+                      setNameInputValid: setNameInputValid,
+                      isSurnameInputValid: isSurnameInputValid,
+                      setSurnameInputValid: setSurnameInputValid,
+                      isRepeatPasswordInputValid: isRepeatPasswordInputValid,
+                      setRepeatPasswordInputValid: setRepeatPasswordInputValid,
+                    ),
                   const SizedBox(height: 20),
                   TextButton(
                     onPressed: () {
@@ -94,8 +184,29 @@ class LoginPageState extends State<LoginPage> {
 
 class LoginForm extends StatelessWidget {
   final VoidCallback toggleForm;
+  final VoidCallback toggleLoading;
+  final String error;
+  final Function setError;
 
-  const LoginForm({super.key, required this.toggleForm});
+  final bool isUsernameInputValid;
+  final Function setUsernameInputValid;
+  final bool isPasswordInputValid;
+  final Function setPasswordInputValid;
+
+  final TextEditingController _usernamenameController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+
+  LoginForm({
+    super.key, 
+    required this.toggleForm, 
+    required this.toggleLoading, 
+    required this.error,
+    required this.setError,
+    required this.isUsernameInputValid,
+    required this.setUsernameInputValid,
+    required this.isPasswordInputValid,
+    required this.setPasswordInputValid,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -108,7 +219,12 @@ class LoginForm extends StatelessWidget {
             style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             textAlign: TextAlign.center),
         const SizedBox(height: 20),
+        if (error.isNotEmpty) 
+          ErrorMessageBox(errorMessage: error),
+        if (error.isNotEmpty)
+          const SizedBox(height: 20),
         TextField(
+          controller : _usernamenameController,
           decoration: InputDecoration(
             labelText: languageProvider.localizedStrings['username'] ?? 'Username',
             border: const OutlineInputBorder(),
@@ -116,6 +232,7 @@ class LoginForm extends StatelessWidget {
         ),
         const SizedBox(height: 15),
         TextField(
+          controller : _passwordController,
           obscureText: true,
           decoration: InputDecoration(
             labelText: languageProvider.localizedStrings['password'] ?? 'Password',
@@ -124,23 +241,51 @@ class LoginForm extends StatelessWidget {
         ),
         const SizedBox(height: 20),
         ElevatedButton(
-          onPressed: () {
-            Navigator.push(
-              context,
-              PageRouteBuilder(
-                pageBuilder: (context, animation, secondaryAnimation) => const ChatListPage(),
-                transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                  const begin = Offset(1.0, 0.0);
-                  const end = Offset.zero;
-                  const curve = Curves.easeInOut;
+          onPressed: () async {
+            String username = _usernamenameController.text;
+            String password = _passwordController.text;
 
-                  var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
-                  var offsetAnimation = animation.drive(tween);
+            if (username.isEmpty) {
+              setUsernameInputValid(false);
+              return;
+            } else if (password.isEmpty) {
+              setPasswordInputValid(false);
+              return;
+            } 
 
-                  return SlideTransition(position: offsetAnimation, child: child);
-                },
-              ),
+            var response = await makeHttpRequest(
+              "POST", 
+              "/auth/login", 
+              {
+                "username": username,
+                "password": password,
+              },
+              {}
             );
+
+            final errorMessage = response[1];
+            setError(errorMessage ?? "");
+
+            if (errorMessage == null) {
+              await saveDataToStorage("accessToken", response[0]["access_token"]);
+
+              Navigator.push(
+                context,
+                PageRouteBuilder(
+                  pageBuilder: (context, animation, secondaryAnimation) => const ChatListPage(),
+                  transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                    const begin = Offset(1.0, 0.0);
+                    const end = Offset.zero;
+                    const curve = Curves.easeInOut;
+
+                    var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+                    var offsetAnimation = animation.drive(tween);
+
+                    return SlideTransition(position: offsetAnimation, child: child);
+                  },
+                ),
+              );
+            }
           },
           style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0072FF)),
           child: Text(
@@ -150,7 +295,10 @@ class LoginForm extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         TextButton(
-          onPressed: toggleForm,
+          onPressed: () {
+            setError("");
+            toggleForm();
+          },
           child: SizedBox(
             width: MediaQuery.of(context).size.width * 0.6,
             child: Text(
@@ -168,8 +316,38 @@ class LoginForm extends StatelessWidget {
 
 class SignUpForm extends StatelessWidget {
   final VoidCallback toggleForm;
+  final VoidCallback toggleLoading;
+  final String error;
+  final Function setError;
 
-  const SignUpForm({super.key, required this.toggleForm});
+  final bool isUsernameInputValid;
+  final Function setUsernameInputValid;
+  final bool isPasswordInputValid;
+  final Function setPasswordInputValid;
+  final bool isNameInputValid;
+  final Function setNameInputValid;
+  final bool isSurnameInputValid;
+  final Function setSurnameInputValid;
+  final bool isRepeatPasswordInputValid;
+  final Function setRepeatPasswordInputValid;
+
+  const SignUpForm({
+    super.key, 
+    required this.toggleForm, 
+    required this.toggleLoading, 
+    required this.error,
+    required this.setError,
+    required this.isUsernameInputValid,
+    required this.setUsernameInputValid,
+    required this.isPasswordInputValid,
+    required this.setPasswordInputValid,
+    required this.isNameInputValid,
+    required this.setNameInputValid,
+    required this.isSurnameInputValid,
+    required this.setSurnameInputValid,
+    required this.isRepeatPasswordInputValid,
+    required this.setRepeatPasswordInputValid,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -182,6 +360,10 @@ class SignUpForm extends StatelessWidget {
             style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             textAlign: TextAlign.center),
         const SizedBox(height: 20),
+        if (error.isNotEmpty) 
+          ErrorMessageBox(errorMessage: error),
+        if (error.isNotEmpty)
+          const SizedBox(height: 20),
         TextField(
           decoration: InputDecoration(
             labelText: languageProvider.localizedStrings['name'] ?? 'First Name',
@@ -246,7 +428,10 @@ class SignUpForm extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         TextButton(
-          onPressed: toggleForm,
+          onPressed: () {
+            setError("");
+            toggleForm();
+          },
           child: SizedBox(
             width: MediaQuery.of(context).size.width * 0.6,
             child: Text(
