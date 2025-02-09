@@ -35,5 +35,12 @@
     "lastSeen": "Last seen at",
     "logout": "logout",
     "currentPassword": "Current password",
-    "delete": "Delete"
+    "delete": "Delete",
+    "fieldCannotBeEmpty": "The field cannot be empty",
+    "passwordsDoesNotMatch": "Passwords don't match",
+    "error": "Error",
+    "userNotFound": "user doesn't exist",
+    "incorrectPassword": "Incorrect password",
+    "signupWasSuccessful": "Sign up is successful. Please, log in",
+    "userAlreadyExists": "User with such username already exists"
 }

@@ -67,7 +67,7 @@ Future makeRequestToBackend(String method, String url, body, Map<String, String>
 
 Future makeHttpRequest(String method, String url, body, Map<String, String> headers) async {
   var result;
-  String? error;
+  var error;
 
   try {
     final response = await makeRequestToBackend(method, url, body, headers);
@@ -95,20 +95,20 @@ Future makeHttpRequest(String method, String url, body, Map<String, String> head
               String newAccessToken = json.decode(response.body).access_token.toString();
               await saveDataToStorage("access_token", newAccessToken);
             } else {
-                error = "Failed to load data!. Status code: ${response.statusCode}";
+              error = response;
             }
           } catch (e) {
-            error = "Error: $e";
+            error = e.toString();
           }
         }
 
       } else {
-        error = "Failed to load data!. Status code: ${response.statusCode}";
+        error = response;
       }
 
     }
   } catch (e) {
-    error = "Error: $e";
+    error = e.toString();
   }
 
   return [result, error];

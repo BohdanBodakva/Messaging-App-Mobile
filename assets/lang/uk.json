@@ -35,5 +35,12 @@
     "lastSeen": "Був(-ла)",
     "logout": "Вийти",
     "currentPassword": "Поточний пароль",
-    "delete": "Видалити"
+    "delete": "Видалити",
+    "fieldCannotBeEmpty": "Це поле не може бути порожнім",
+    "passwordsDoesNotMatch": "Паролі не співпадають",
+    "error": "Помилка",
+    "userNotFound": "користувача не існує",
+    "incorrectPassword": "Неправильний пароль",
+    "signupWasSuccessful": "Користувач зареєструваний успішно. Будь ласка, увійдіть",
+    "userAlreadyExists": "Користувач з таким ім'ям вже існує"
 }

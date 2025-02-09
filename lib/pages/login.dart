@@ -22,20 +22,21 @@ class LoginPageState extends State<LoginPage> {
   String error = "";
 
   bool isNameInputValid = true;
-  bool isSurnameInputValid = true;
   bool isUsernameInputValid = true;
   bool isPasswordInputValid = true;
   bool isRepeatPasswordInputValid = true;
 
-  void setNameInputValid(bool newValue) {
+  bool displaySuccessfulSignupMessage = false;
+
+  void setSuccessfulSignupMessage(bool newValue) {
     setState(() {
-      isNameInputValid = newValue;
+      displaySuccessfulSignupMessage = newValue;
     });
   }
 
-  void setSurnameInputValid(bool newValue) {
+  void setNameInputValid(bool newValue) {
     setState(() {
-      isSurnameInputValid = newValue;
+      isNameInputValid = newValue;
     });
   }
 
@@ -64,13 +65,14 @@ class LoginPageState extends State<LoginPage> {
 
   void toggleForm() {
     setState(() {
+      error = "";
       isLoginForm = !isLoginForm;
     });
   }
 
-  void toggleLoading() {
+  void setLoading(bool newValue) {
     setState(() {
-      isLoading = !isLoading;
+      isLoading = newValue;
     });
   }
 
@@ -89,17 +91,6 @@ class LoginPageState extends State<LoginPage> {
     var languageProvider = Provider.of<LanguageProvider>(context);
     String languageCode = languageProvider.locale.languageCode;
 
-    Future<Map<String, dynamic>> fetchData() async {
-      final uri = Uri.parse("http://127.0.0.1/:5000/api/a");
-      final response = await http.get(uri);
-
-      if (response.statusCode == 200) {
-        return json.decode(response.body);
-      } else {
-        throw Exception("Failed to load data");
-      }
-    }
-
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
@@ -107,75 +98,89 @@ class LoginPageState extends State<LoginPage> {
         title: const Text("Messaging App"),
         centerTitle: true,
       ),
-      body: GestureDetector(
-        onTap: () => FocusScope.of(context).unfocus(),
-        child: Center(
-          child: SingleChildScrollView(
-            child: Padding(
-              padding: const EdgeInsets.all(20.0),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  isLoginForm ? 
-                    LoginForm(
-                      toggleForm: toggleForm, 
-                      toggleLoading: toggleLoading,
-                      error: error, 
-                      setError: setError,
-                      isUsernameInputValid: isUsernameInputValid,
-                      setUsernameInputValid: setUsernameInputValid,
-                      isPasswordInputValid: isPasswordInputValid,
-                      setPasswordInputValid: setPasswordInputValid,
-                    ) : 
-                    SignUpForm(
-                      toggleForm: toggleForm, 
-                      toggleLoading: toggleLoading, 
-                      error: error, 
-                      setError: setError,
-                      isUsernameInputValid: isUsernameInputValid,
-                      setUsernameInputValid: setUsernameInputValid,
-                      isPasswordInputValid: isPasswordInputValid,
-                      setPasswordInputValid: setPasswordInputValid,
-                      isNameInputValid: isNameInputValid,
-                      setNameInputValid: setNameInputValid,
-                      isSurnameInputValid: isSurnameInputValid,
-                      setSurnameInputValid: setSurnameInputValid,
-                      isRepeatPasswordInputValid: isRepeatPasswordInputValid,
-                      setRepeatPasswordInputValid: setRepeatPasswordInputValid,
-                    ),
-                  const SizedBox(height: 20),
-                  TextButton(
-                    onPressed: () {
-                      if (languageCode == 'en') {
-                        languageProvider.setLocale('uk');
-                      } else {
-                        languageProvider.setLocale('en');
-                      }
-                    },
-                    style: TextButton.styleFrom(
-                      backgroundColor: Colors.blue,
-                      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.language, color: Colors.white),
-                        const SizedBox(width: 10),
-                        Text(
-                          languageCode == 'en' ? 'en' : 'укр',
-                          style: const TextStyle(color: Colors.white),
+      body: Stack(
+        children: [
+          GestureDetector(
+            onTap: () => FocusScope.of(context).unfocus(),
+            child: Center(
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.all(20.0),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      isLoginForm ? 
+                        LoginForm(
+                          displaySuccessfulSignupMessage: displaySuccessfulSignupMessage,
+                          setSuccessfulSignupMessage: setSuccessfulSignupMessage,
+                          toggleForm: toggleForm, 
+                          isLoading: isLoading,
+                          setLoading: setLoading,
+                          error: error, 
+                          setError: setError,
+                          isUsernameInputValid: isUsernameInputValid,
+                          setUsernameInputValid: setUsernameInputValid,
+                          isPasswordInputValid: isPasswordInputValid,
+                          setPasswordInputValid: setPasswordInputValid,
+                        ) : 
+                        SignUpForm(
+                          setSuccessfulSignupMessage: setSuccessfulSignupMessage,
+                          toggleForm: toggleForm, 
+                          isLoading: isLoading,
+                          setLoading: setLoading, 
+                          error: error, 
+                          setError: setError,
+                          isUsernameInputValid: isUsernameInputValid,
+                          setUsernameInputValid: setUsernameInputValid,
+                          isPasswordInputValid: isPasswordInputValid,
+                          setPasswordInputValid: setPasswordInputValid,
+                          isNameInputValid: isNameInputValid,
+                          setNameInputValid: setNameInputValid,
+                          isRepeatPasswordInputValid: isRepeatPasswordInputValid,
+                          setRepeatPasswordInputValid: setRepeatPasswordInputValid,
                         ),
-                      ],
-                    ),
+                      const SizedBox(height: 20),
+                      TextButton(
+                        onPressed: () {
+                          if (languageCode == 'en') {
+                            languageProvider.setLocale('uk');
+                          } else {
+                            languageProvider.setLocale('en');
+                          }
+                        },
+                        style: TextButton.styleFrom(
+                          backgroundColor: Colors.blue,
+                          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.language, color: Colors.white),
+                            const SizedBox(width: 10),
+                            Text(
+                              languageCode == 'en' ? 'en' : 'укр',
+                              style: const TextStyle(color: Colors.white),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
           ),
-        ),
+          if (isLoading)
+            Container(
+              color: Colors.black.withOpacity(0.3),
+              child: const Center(
+                child: CircularProgressIndicator(),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -183,8 +188,12 @@ class LoginPageState extends State<LoginPage> {
 
 
 class LoginForm extends StatelessWidget {
+  final bool displaySuccessfulSignupMessage;
+  final Function setSuccessfulSignupMessage;
+
   final VoidCallback toggleForm;
-  final VoidCallback toggleLoading;
+  final bool isLoading;
+  final Function setLoading;
   final String error;
   final Function setError;
 
@@ -198,8 +207,11 @@ class LoginForm extends StatelessWidget {
 
   LoginForm({
     super.key, 
-    required this.toggleForm, 
-    required this.toggleLoading, 
+    required this.displaySuccessfulSignupMessage,
+    required this.setSuccessfulSignupMessage,
+    required this.toggleForm,
+    required this.isLoading,
+    required this.setLoading, 
     required this.error,
     required this.setError,
     required this.isUsernameInputValid,
@@ -219,15 +231,30 @@ class LoginForm extends StatelessWidget {
             style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             textAlign: TextAlign.center),
         const SizedBox(height: 20),
+        if (displaySuccessfulSignupMessage) 
+          ErrorMessageBox(
+            errorMessage: languageProvider.localizedStrings['signupWasSuccessful'] ?? "Sign up is successful. Please, log in", 
+            isSuccess: true,
+          ),
         if (error.isNotEmpty) 
           ErrorMessageBox(errorMessage: error),
-        if (error.isNotEmpty)
+        if (displaySuccessfulSignupMessage || error.isNotEmpty)
           const SizedBox(height: 20),
         TextField(
           controller : _usernamenameController,
           decoration: InputDecoration(
             labelText: languageProvider.localizedStrings['username'] ?? 'Username',
             border: const OutlineInputBorder(),
+          ),
+        ),
+        Visibility(
+          visible: !isUsernameInputValid,
+          child: Padding(
+            padding: const EdgeInsets.only(top: 5.0, left: 5.0),
+            child: Text(
+              languageProvider.localizedStrings['fieldCannotBeEmpty'] ?? 'The filed cannot be empty', 
+              style: const TextStyle(color: Colors.red, fontSize: 12),
+            ),
           ),
         ),
         const SizedBox(height: 15),
@@ -239,11 +266,24 @@ class LoginForm extends StatelessWidget {
             border: const OutlineInputBorder(),
           ),
         ),
+        Visibility(
+          visible: !isPasswordInputValid,
+          child: Padding(
+            padding: const EdgeInsets.only(top: 5.0, left: 5.0),
+            child: Text(
+              languageProvider.localizedStrings['fieldCannotBeEmpty'] ?? 'The filed cannot be empty', 
+              style: const TextStyle(color: Colors.red, fontSize: 12),
+            ),
+          ),
+        ),
         const SizedBox(height: 20),
         ElevatedButton(
           onPressed: () async {
+            setUsernameInputValid(true);
+            setPasswordInputValid(true);
+
             String username = _usernamenameController.text;
-            String password = _passwordController.text;
+            String password = _passwordController.text; 
 
             if (username.isEmpty) {
               setUsernameInputValid(false);
@@ -251,7 +291,9 @@ class LoginForm extends StatelessWidget {
             } else if (password.isEmpty) {
               setPasswordInputValid(false);
               return;
-            } 
+            }
+
+            setLoading(true);
 
             var response = await makeHttpRequest(
               "POST", 
@@ -263,10 +305,9 @@ class LoginForm extends StatelessWidget {
               {}
             );
 
-            final errorMessage = response[1];
-            setError(errorMessage ?? "");
+            final error = response[1];
 
-            if (errorMessage == null) {
+            if (error == null) {
               await saveDataToStorage("accessToken", response[0]["access_token"]);
 
               Navigator.push(
@@ -285,7 +326,32 @@ class LoginForm extends StatelessWidget {
                   },
                 ),
               );
+            } else {
+
+              try {
+                final errorBody = json.decode(error.body);
+                final errorStatusCode = error.statusCode;
+
+                if (errorStatusCode == 404){
+                  final msg = errorBody["msg"].toString();
+                  final username = errorBody["username"].toString();
+
+                  if (msg.toLowerCase().contains("incorrect password")) {
+                    setError(languageProvider.localizedStrings['incorrectPassword'] ?? "Incorrect password");
+                  } else {
+                    setError("$username: ${languageProvider.localizedStrings['userNotFound'] ?? "user dosn't exist"}");
+                  }
+
+                } else {
+                  setError(error.body.toString());
+                }
+              } catch (e) {
+                setError(e.toString());
+              }
+              
             }
+
+            setLoading(false);
           },
           style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0072FF)),
           child: Text(
@@ -297,6 +363,12 @@ class LoginForm extends StatelessWidget {
         TextButton(
           onPressed: () {
             setError("");
+
+            setSuccessfulSignupMessage(false);
+
+            setUsernameInputValid(true);
+            setPasswordInputValid(true);
+
             toggleForm();
           },
           child: SizedBox(
@@ -315,8 +387,11 @@ class LoginForm extends StatelessWidget {
 }
 
 class SignUpForm extends StatelessWidget {
+  final Function setSuccessfulSignupMessage;
+
   final VoidCallback toggleForm;
-  final VoidCallback toggleLoading;
+  final bool isLoading;
+  final Function setLoading;
   final String error;
   final Function setError;
 
@@ -326,15 +401,21 @@ class SignUpForm extends StatelessWidget {
   final Function setPasswordInputValid;
   final bool isNameInputValid;
   final Function setNameInputValid;
-  final bool isSurnameInputValid;
-  final Function setSurnameInputValid;
   final bool isRepeatPasswordInputValid;
   final Function setRepeatPasswordInputValid;
 
-  const SignUpForm({
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _surnameController = TextEditingController();
+  final TextEditingController _usernamenameController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _repeatPasswordController = TextEditingController();
+
+  SignUpForm({
     super.key, 
+    required this.setSuccessfulSignupMessage,
     required this.toggleForm, 
-    required this.toggleLoading, 
+    required this.isLoading,
+    required this.setLoading, 
     required this.error,
     required this.setError,
     required this.isUsernameInputValid,
@@ -343,8 +424,6 @@ class SignUpForm extends StatelessWidget {
     required this.setPasswordInputValid,
     required this.isNameInputValid,
     required this.setNameInputValid,
-    required this.isSurnameInputValid,
-    required this.setSurnameInputValid,
     required this.isRepeatPasswordInputValid,
     required this.setRepeatPasswordInputValid,
   });
@@ -365,13 +444,25 @@ class SignUpForm extends StatelessWidget {
         if (error.isNotEmpty)
           const SizedBox(height: 20),
         TextField(
+          controller: _nameController,
           decoration: InputDecoration(
             labelText: languageProvider.localizedStrings['name'] ?? 'First Name',
             border: const OutlineInputBorder(),
           ),
         ),
+        Visibility(
+          visible: !isNameInputValid,
+          child: Padding(
+            padding: const EdgeInsets.only(top: 5.0, left: 5.0),
+            child: Text(
+              languageProvider.localizedStrings['fieldCannotBeEmpty'] ?? 'The filed cannot be empty', 
+              style: const TextStyle(color: Colors.red, fontSize: 12),
+            ),
+          ),
+        ),
         const SizedBox(height: 15),
         TextField(
+          controller: _surnameController,
           decoration: InputDecoration(
             labelText: languageProvider.localizedStrings['surname'] ?? 'Last Name',
             border: const OutlineInputBorder(),
@@ -379,46 +470,133 @@ class SignUpForm extends StatelessWidget {
         ),
         const SizedBox(height: 15),
         TextField(
+          controller: _usernamenameController,
           decoration: InputDecoration(
             labelText: languageProvider.localizedStrings['username'] ?? 'Username',
             border: const OutlineInputBorder(),
           ),
         ),
+        Visibility(
+          visible: !isUsernameInputValid,
+          child: Padding(
+            padding: const EdgeInsets.only(top: 5.0, left: 5.0),
+            child: Text(
+              languageProvider.localizedStrings['fieldCannotBeEmpty'] ?? 'The filed cannot be empty', 
+              style: const TextStyle(color: Colors.red, fontSize: 12),
+            ),
+          ),
+        ),
         const SizedBox(height: 15),
         TextField(
+          controller: _passwordController,
           obscureText: true,
           decoration: InputDecoration(
             labelText: languageProvider.localizedStrings['password'] ?? 'Password',
             border: const OutlineInputBorder(),
           ),
         ),
+        Visibility(
+          visible: !isPasswordInputValid,
+          child: Padding(
+            padding: const EdgeInsets.only(top: 5.0, left: 5.0),
+            child: Text(
+              languageProvider.localizedStrings['fieldCannotBeEmpty'] ?? 'The filed cannot be empty', 
+              style: const TextStyle(color: Colors.red, fontSize: 12),
+            ),
+          ),
+        ),
         const SizedBox(height: 15),
         TextField(
+          controller: _repeatPasswordController,
           obscureText: true,
           decoration: InputDecoration(
             labelText: languageProvider.localizedStrings['repeatPassword'] ?? 'Repeat Password',
             border: const OutlineInputBorder(),
           ),
         ),
+        Visibility(
+          visible: !isRepeatPasswordInputValid,
+          child: Padding(
+            padding: const EdgeInsets.only(top: 5.0, left: 5.0),
+            child: Text(
+              languageProvider.localizedStrings['passwordsDoesNotMatch'] ?? "Passwords don't match", 
+              style: const TextStyle(color: Colors.red, fontSize: 12),
+            ),
+          ),
+        ),
         const SizedBox(height: 20),
         ElevatedButton(
-          onPressed: () {
-            Navigator.push(
-              context,
-              PageRouteBuilder(
-                pageBuilder: (context, animation, secondaryAnimation) => const ChatListPage(),
-                transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                  const begin = Offset(1.0, 0.0);
-                  const end = Offset.zero;
-                  const curve = Curves.easeInOut;
+          onPressed: () async {
+            setNameInputValid(true);
+            setPasswordInputValid(true);
+            setUsernameInputValid(true);
+            setRepeatPasswordInputValid(true);
 
-                  var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
-                  var offsetAnimation = animation.drive(tween);
+            String name = _nameController.text;
+            String surname = _surnameController.text; 
+            String username = _usernamenameController.text;
+            String password = _passwordController.text; 
+            String repeatPassword = _repeatPasswordController.text;
 
-                  return SlideTransition(position: offsetAnimation, child: child);
-                },
-              ),
+            if (name.isEmpty) {
+              setNameInputValid(false);
+              return;
+            } else if (username.isEmpty) {
+              setUsernameInputValid(false);
+              return;
+            } else if (password.isEmpty) {
+              setPasswordInputValid(false);
+              return;
+            } else if (repeatPassword != password) {
+              setRepeatPasswordInputValid(false);
+              return;
+            }
+
+            setLoading(true);
+
+            var response = await makeHttpRequest(
+              "POST", 
+              "/auth/signup", 
+              {
+                "name": name,
+                "surname": surname,
+                "username": username,
+                "password": password,
+              },
+              {}
             );
+
+            final error = response[1];
+
+            if (error == null) {
+              setSuccessfulSignupMessage(true);
+              toggleForm();
+            } else {
+
+              try {
+                final errorBody = json.decode(error.body);
+                final errorStatusCode = error.statusCode;
+
+                if (errorStatusCode == 409){
+                  final msg = errorBody["msg"].toString();
+                  final username = errorBody["username"].toString();
+
+                  if (msg.toLowerCase().contains("already exists")) {
+                    setError(languageProvider.localizedStrings['userAlredyExists'] ?? "User with such username already exists");
+                  } else {
+                    setError(error.body.toString());
+                  }
+
+                } else {
+                  setError(error.body.toString());
+                }
+              } catch (e) {
+                setError(e.toString());
+              }
+              
+            }
+
+            setLoading(false);
           },
           style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0072FF)),
           child: Text(
@@ -430,6 +608,14 @@ class SignUpForm extends StatelessWidget {
         TextButton(
           onPressed: () {
             setError("");
+
+            setSuccessfulSignupMessage(false);
+
+            setNameInputValid(true);
+            setUsernameInputValid(true);
+            setPasswordInputValid(true);
+            setRepeatPasswordInputValid(true);
+
             toggleForm();
           },
           child: SizedBox(
