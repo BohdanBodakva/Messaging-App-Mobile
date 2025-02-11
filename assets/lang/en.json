@@ -42,5 +42,6 @@
     "userNotFound": "user doesn't exist",
     "incorrectPassword": "Incorrect password",
     "signupWasSuccessful": "Sign up is successful. Please, log in",
-    "userAlreadyExists": "User with such username already exists"
+    "userAlreadyExists": "User with such username already exists",
+    "info": "Info"
 }

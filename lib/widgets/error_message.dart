@@ -46,7 +46,9 @@ class ErrorMessageBox extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    "${languageProvider.localizedStrings['error'] ?? 'Error'}: ",
+                    isSuccess ? 
+                      "${languageProvider.localizedStrings['info'] ?? 'Info'}: " :
+                      "${languageProvider.localizedStrings['error'] ?? 'Error'}: ",
                     style: TextStyle(
                       color: textColor,
                       fontSize: 14,

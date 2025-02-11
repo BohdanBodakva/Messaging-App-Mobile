@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:messaging_app/handlers/date_time.dart';
 import 'package:messaging_app/handlers/shared_prefs.dart';
+import 'package:messaging_app/handlers/websocket.dart';
 import 'package:messaging_app/models/chat.dart';
 import 'package:messaging_app/models/user.dart';
 import 'package:messaging_app/pages/chat_area.dart';
@@ -11,9 +12,6 @@ import 'package:messaging_app/pages/login.dart';
 import 'package:messaging_app/pages/user_page.dart';
 import 'package:messaging_app/providers/language_provider.dart';
 import 'package:provider/provider.dart';
-import 'package:socket_io_client/socket_io_client.dart' as IO;
-
-const socketioBackendUrl = "http://192.168.0.104:5001";
 
 class ChatListPage extends StatefulWidget {
 
@@ -33,7 +31,6 @@ class ChatListPageState extends State<ChatListPage> {
     });
   }
 
-  late IO.Socket socket;
   bool isLoading = true;
 
   final ScrollController _scrollController = ScrollController();
@@ -64,12 +61,7 @@ class ChatListPageState extends State<ChatListPage> {
   }
 
   Future<void> connectToSocket() async {
-    socket = IO.io(socketioBackendUrl, IO.OptionBuilder()
-        .setTransports(['websocket'])
-        .disableAutoConnect()
-        .build());
-
-    socket.onConnect((_) {
+    socket.on("connect", (data) {
       
     });
 
@@ -104,7 +96,7 @@ class ChatListPageState extends State<ChatListPage> {
       socket.emit("go_online", {"user_id": userId});
     });
 
-    socket.onDisconnect((_) {
+    socket.on("disconnect", (data) {
       
     });
 
