@@ -1,12 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:messaging_app/models/chat.dart';
+import 'package:messaging_app/models/message.dart';
+import 'package:messaging_app/models/user.dart';
 import 'package:messaging_app/pages/chat_info_page.dart';
 import 'package:messaging_app/providers/language_provider.dart';
 import 'package:provider/provider.dart';
 
 class ChatPage extends StatefulWidget {
-  const ChatPage({super.key});
+  final Chat chat;
+  final User? currentUser;
+
+  const ChatPage({super.key, required this.chat, required this.currentUser});
 
   @override
   ChatPageState createState() => ChatPageState();
@@ -16,13 +22,19 @@ class ChatPageState extends State<ChatPage> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
 
-  List<String> messages = [
-    'Hello!',
-    'Hi there!',
-    'How are you?',
-    'I am good, thanks!',
-  ];
-  final List<bool> isMyMessage = [true, false, true, false];
+  late bool isGroup;
+  late List<User>? otherUsers;
+  late String chatName;
+  late List<Message> messages;
+
+  @override
+  void initState() {
+    super.initState();
+    isGroup = widget.chat.isGroup!;
+    otherUsers = widget.chat.users!.where((user) => user.id != widget.currentUser!.id).toList();
+    chatName = widget.chat.isGroup == true ? widget.chat.name! : otherUsers![0].name!;
+    messages = widget.chat.messages!;
+  }
 
   int? _selectedDeleteIndex;
 
@@ -43,18 +55,16 @@ class ChatPageState extends State<ChatPage> {
 
   void _handleSend() {
     if (_messageController.text.isNotEmpty) {
-      // Sanitize input by trimming leading/trailing newlines
       String sanitizedMessage = _messageController.text.trim();
-      // Replace multiple consecutive Enter presses with one newline
       sanitizedMessage = sanitizedMessage.replaceAll(RegExp(r'\n+'), '\n');
-      if (sanitizedMessage.isNotEmpty) {
-        setState(() {
-          messages.add(sanitizedMessage);
-          isMyMessage.add(true);
-          _messageController.clear();
-        });
-        _scrollToBottom();
-      }
+      // if (sanitizedMessage.isNotEmpty) {
+      //   setState(() {
+      //     messages.add(sanitizedMessage);
+      //     isMyMessage.add(true);
+      //     _messageController.clear();
+      //   });
+      //   _scrollToBottom();
+      // }
     }
   }
 
@@ -69,7 +79,7 @@ class ChatPageState extends State<ChatPage> {
   void _deleteMessage(int index) {
     setState(() {
       messages.removeAt(index);
-      isMyMessage.removeAt(index);
+      // isMyMessage.removeAt(index);
       _selectedDeleteIndex = null;
     });
   }
@@ -103,7 +113,10 @@ class ChatPageState extends State<ChatPage> {
                   )
                 );
               },
-              child: const Text('John Doe', style: TextStyle(fontSize: 18)),
+              child: Text(
+                isGroup ? chatName : "${otherUsers![0].name} ${otherUsers![0].surname}", 
+                style: const TextStyle(fontSize: 18)
+              ),
             )
           ],
         ),
@@ -129,9 +142,11 @@ class ChatPageState extends State<ChatPage> {
             },
             child: Container(
               margin: const EdgeInsets.only(right: 14.0),
-              child: const CircleAvatar(
+              child: CircleAvatar(
                 radius: 20,
-                backgroundImage: AssetImage('assets/letter_images/a.png'),
+                backgroundImage: AssetImage(
+                  isGroup ? widget.chat.chatPhotoLink! : otherUsers![0].profilePhotoLink!
+                ),
               ),
             )
           )
@@ -151,14 +166,17 @@ class ChatPageState extends State<ChatPage> {
                 controller: _scrollController,
                 itemCount: messages.length,
                 itemBuilder: (context, index) {
+
                   return ChatMessageItem(
-                    index: index,
+                    index: messages[index].id!,
                     message: messages[index],
-                    isMyMessage: isMyMessage[index],
+                    currentUser: widget.currentUser,
+                    chat: widget.chat,
+                    isGroup: widget.chat.isGroup!,
                     isSelectedForDeletion: _selectedDeleteIndex == index,
                     onDelete: () => _deleteMessage(index),
                     onLongPress: () {
-                      if (isMyMessage[index]) {
+                      if (messages[index].userId! == widget.currentUser!.id) {
                         setState(() {
                           _selectedDeleteIndex = index;
                         });
@@ -210,21 +228,28 @@ class ChatPageState extends State<ChatPage> {
 
 class ChatMessageItem extends StatelessWidget {
   final int index;
-  final String message;
-  final bool isMyMessage;
+  final Message message;
+  final User? currentUser;
   final bool isSelectedForDeletion;
   final VoidCallback onDelete;
   final VoidCallback onLongPress;
+  final bool isMyMessage;
+  final bool isGroup;
+  final Chat chat;
+  final User user;
 
-  const ChatMessageItem({
+  ChatMessageItem({
     super.key,
     required this.index,
     required this.message,
-    required this.isMyMessage,
+    required this.currentUser,
+    required this.chat,
+    required this.isGroup,
     required this.isSelectedForDeletion,
     required this.onDelete,
     required this.onLongPress,
-  });
+  }) : isMyMessage = message.userId == currentUser!.id,
+       user = chat.users!.where((user) => user.id == message.userId).toList()[0];
 
   @override
   Widget build(BuildContext context) {
@@ -276,19 +301,19 @@ class ChatMessageItem extends StatelessWidget {
                     : Column(
                         crossAxisAlignment: isMyMessage ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            'Sender $index',
+                          isGroup && !isMyMessage ? Text(
+                            "${user.name} ${user.surname}",
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               color: isMyMessage ? Colors.white : Colors.black,
                               fontSize: 14,
                             ),
-                          ),
+                          ) : Container(),
                           const SizedBox(height: 5),
                           Container(
                             constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.5),
                             child: SelectableText(
-                              message,
+                              message.text!,
                               style: TextStyle(
                                 color: isMyMessage ? Colors.white : Colors.black87,
                                 fontSize: 16,

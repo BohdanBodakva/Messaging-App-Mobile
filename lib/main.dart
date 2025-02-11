@@ -94,25 +94,8 @@ class ConnectionStatusPageState extends State<ConnectionStatusPage> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    User? currentUser;
-    List<Chat> chatList = [];
-
-    void setCurrentUser(User newUser) {
-      setState(() {
-        currentUser = newUser;
-      });
-    }
-
-    void setChatList(List<Chat> newChatList) {
-      setState(() {
-        chatList = newChatList;
-      });
-    }
-    
-    return _isConnected ? 
-      LoginPage(currentUser: currentUser, setCurrentUser: setCurrentUser) : 
-      const NoConnectionPage();
+  Widget build(BuildContext context) {    
+    return _isConnected ? const LoginPage() : const NoConnectionPage();
   }
 }
 

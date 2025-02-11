@@ -1,26 +1,64 @@
+import 'dart:ffi';
+
+import 'package:messaging_app/models/chat.dart';
+
 class User {
   int? id;
   String? name;
   String? surname;
   String? username;
   String? profilePhotoLink;
-  DateTime? lastSeen;
+  bool? isOnline;
   List? chats;
-  List? unreadMesssages;
+  List? unreadMessages;
 
   User({
     int? id,
     required String this.name,
     String? surname,
-    required String this.username,
+    required this.username,
     String? profilePhotoLink,
-    DateTime? lastSeen,
+    bool? isOnline,
     List? chats,
     List? unreadMessages,
   })  : id = id ?? -1,
         surname = surname ?? "",
-        profilePhotoLink = profilePhotoLink ?? "assets/letter_images/${name.isNotEmpty ? name[0] : "u"}.png",
+        profilePhotoLink = profilePhotoLink ?? "assets/letter_images/${name.isNotEmpty ? name[0].toLowerCase() : "u"}.png",
         chats = chats ?? [],
-        unreadMesssages = unreadMessages ?? [];
+        isOnline = isOnline ?? false,
+        unreadMessages = unreadMessages ?? [];
 
+  factory User.fromJson(Map<String, dynamic> json, {bool includeChats=false}) {
+    User user = User(
+      id: json['id'] ?? -1,
+      name: json['name'] ?? "",
+      surname: json['surname'] ?? "",
+      username: json['username'] ?? "",
+      profilePhotoLink: json['profile_photo_link'],
+      isOnline: json['is_online'],
+      chats: [],
+      unreadMessages: json['unread_messages'] ?? [],
+    );
+
+    if (includeChats) {
+      user.chats = (json['chats'] as List<dynamic>?)
+          ?.map((chat) => Chat.fromJson(chat))
+          .toList() ?? [];
+    }
+
+    return user;
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'surname': surname,
+      'username': username,
+      'profile_photo_link': profilePhotoLink,
+      'last_seen': isOnline,
+      'chats': chats?.map((chat) => Chat.fromJson(chat)).toList() ?? [],
+      'unread_messages': unreadMessages,
+    };
+  }
 }

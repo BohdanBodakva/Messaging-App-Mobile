@@ -15,12 +15,8 @@ Future makeRequestToBackend(String method, String url, body, Map<String, String>
   if (!authUrls.contains(url)) {
     if (headers.isNotEmpty) {
       requestHeaders = headers;
-      requestHeaders["Authorization"] = "Bearer $accessToken";
-    } else {
-      requestHeaders = {
-        "Authorization": "Bearer $accessToken",
-      };
     }
+    requestHeaders["Authorization"] = "Bearer $accessToken";
   }
 
   requestHeaders["Accept"] = "application/json";
@@ -94,6 +90,20 @@ Future makeHttpRequest(String method, String url, body, Map<String, String> head
             if (response.statusCode >= 200 && response.statusCode < 300) {
               String newAccessToken = json.decode(response.body).access_token.toString();
               await saveDataToStorage("access_token", newAccessToken);
+
+              // repeat request with new access_token
+              try {
+                final response = await makeRequestToBackend(method, url, body, headers);
+
+                if (response.statusCode >= 200 && response.statusCode < 300) {
+                  result = json.decode(response.body);
+                } else {
+                  error = response;
+                }
+              } catch (e) {
+                error = e.toString();
+              }
+
             } else {
               error = response;
             }

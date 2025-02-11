@@ -4,23 +4,50 @@ import 'package:messaging_app/models/user.dart';
 class Message {
   int? id;
   String? text;
-  List? sentFiles;
+  List<SentFile>? sentFiles;
   DateTime? sendAt;
-  List? usersThatUnread;
+  List<User>? usersThatUnread;
   int? userId;
   int? chatId;
 
   Message({
     int? id,
-    required String this.text,
-    List? sentFiles,
-    required DateTime this.sendAt,
-    List? usersThatUnread,
+    required this.text,
+    List<SentFile>? sentFiles,
+    required this.sendAt,
+    List<User>? usersThatUnread,
     int? userId,
-    required int this.chatId,
+    required this.chatId,
   })  : id = id ?? -1,
         sentFiles = sentFiles ?? [],
         usersThatUnread = usersThatUnread ?? [],
         userId = userId ?? -1;
 
+  factory Message.fromJson(Map<String, dynamic> json) {
+    return Message(
+      id: json['id'] ?? -1,
+      text: json['text'] ?? "",
+      sentFiles: (json['sent_files'] as List<dynamic>?)
+          ?.map((file) => SentFile.fromJson(file))
+          .toList() ?? [],
+      sendAt: json['send_at'] != null ? DateTime.parse(json['send_at']) : null,
+      usersThatUnread: (json['users_that_unread'] as List<dynamic>?)
+          ?.map((user) => User.fromJson(user))
+          .toList() ?? [],
+      userId: json['user_id'] ?? -1,
+      chatId: json['chat_id'] ?? -1,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'text': text,
+      'sent_files': sentFiles?.map((file) => file.toJson()).toList(),
+      'send_at': sendAt?.toIso8601String(),
+      'users_that_unread': usersThatUnread?.map((user) => user.toJson()).toList(),
+      'user_id': userId,
+      'chat_id': chatId,
+    };
+  }
 }

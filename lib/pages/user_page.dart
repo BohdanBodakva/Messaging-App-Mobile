@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
+import 'package:messaging_app/models/user.dart';
 import 'package:messaging_app/pages/login.dart';
 import 'package:messaging_app/providers/language_provider.dart';
 import 'package:provider/provider.dart';
 
 class UserProfilePage extends StatefulWidget {
-  const UserProfilePage({super.key});
+  User? currentUser;
+
+  UserProfilePage({super.key, required this.currentUser});
 
   @override
   UserProfilePageState createState() => UserProfilePageState();
@@ -15,9 +18,18 @@ class UserProfilePage extends StatefulWidget {
 class UserProfilePageState extends State<UserProfilePage> {
   File? _image;
   final _picker = ImagePicker();
-  final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _surnameController = TextEditingController();
-  final TextEditingController _usernameController = TextEditingController();
+
+  late TextEditingController _nameController;
+  late TextEditingController _surnameController;
+  late TextEditingController _usernameController;
+
+   @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.currentUser?.name ?? "");
+    _surnameController = TextEditingController(text: widget.currentUser?.surname ?? "");
+    _usernameController = TextEditingController(text: widget.currentUser?.username ?? "");
+  }
 
   Future<void> _pickImage() async {
     final pickedFile = await _picker.pickImage(source: ImageSource.gallery);
@@ -188,9 +200,7 @@ class UserProfilePageState extends State<UserProfilePage> {
                 onTap: _pickImage,
                 child: CircleAvatar(
                   radius: 50,
-                  backgroundImage: _image != null
-                      ? FileImage(_image!) as ImageProvider
-                      : const AssetImage('assets/letter_images/a.png'),
+                  backgroundImage: AssetImage(widget.currentUser!.profilePhotoLink!),
                 ),
               ),
               _buildTextField(_nameController, languageProvider.localizedStrings['name'] ?? "Name"),
