@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:messaging_app/handlers/date_time.dart';
+import 'package:messaging_app/handlers/websocket.dart';
 import 'package:messaging_app/models/chat.dart';
 import 'package:messaging_app/models/message.dart';
 import 'package:messaging_app/models/user.dart';
@@ -10,22 +12,29 @@ import 'package:provider/provider.dart';
 
 class ChatPage extends StatefulWidget {
   final Chat chat;
-  final User? currentUser;
+  User? currentUser;
 
-  const ChatPage({super.key, required this.chat, required this.currentUser});
+  ChatPage({super.key, required this.chat, required this.currentUser});
 
   @override
   ChatPageState createState() => ChatPageState();
 }
 
 class ChatPageState extends State<ChatPage> {
+  bool isListening = false;
+  bool isLoading = true;
+
+  List<Message> chatHistory = [];
+  final itemsCount = 15;
+  int loadHistoryOffset = 0;
+  bool isChatHistoryEnded = false;
+
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
 
   late bool isGroup;
   late List<User>? otherUsers;
   late String chatName;
-  late List<Message> messages;
 
   @override
   void initState() {
@@ -33,8 +42,76 @@ class ChatPageState extends State<ChatPage> {
     isGroup = widget.chat.isGroup!;
     otherUsers = widget.chat.users!.where((user) => user.id != widget.currentUser!.id).toList();
     chatName = widget.chat.isGroup == true ? widget.chat.name! : otherUsers![0].name!;
-    messages = widget.chat.messages!;
+    _loadChatHistory();
   }
+
+  _loadChatHistory(){
+    (() async {
+      await _defineSocketEvents();
+    })();
+  }
+
+  Future<void> _defineSocketEvents() async {
+    socket.on("load_chat_history", (data) {
+      final history = (data["chat_history"] as List).map((msg) => Message.fromJson(msg)).toList();
+      final isEnd = data["is_end"].toString().toLowerCase() == "true";
+
+      print("KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK");
+
+      setState(() {
+        chatHistory = [...chatHistory, ...history];
+      });
+
+      if (isLoading) {
+        setState(() {
+          isLoading = false;
+          loadHistoryOffset += itemsCount;
+        });
+      }
+
+      if (isEnd) {
+        setState(() {
+          isChatHistoryEnded = true;
+        });
+      }
+    });
+
+    socket.off("send_message");
+
+    socket.on('send_message', (data) {
+      final message = Message.fromJson(data['message']);
+      final room = data['room'];
+
+      User newUser = widget.currentUser!;
+      newUser.chats = [
+        newUser.chats!.where((c) => c.id == room).first, 
+        ...newUser.chats!.where((c) => c.id != room)
+      ];
+      newUser.chats![0].messages = [message];
+
+      if (!mounted) return;
+
+      setState(() {
+        widget.currentUser = newUser;
+      });
+
+      if (widget.chat.id == room) {
+        setState(() {
+          chatHistory = [...chatHistory, message];
+        });
+      } else {
+        // MAKE NOTIFICATION
+      }
+      
+    });
+
+    socket.emit("load_chat_history", {
+      "chat_id": widget.chat.id,
+      "items_count": itemsCount,
+      "offset": loadHistoryOffset
+    });
+  }
+
 
   int? _selectedDeleteIndex;
 
@@ -55,16 +132,18 @@ class ChatPageState extends State<ChatPage> {
 
   void _handleSend() {
     if (_messageController.text.isNotEmpty) {
-      String sanitizedMessage = _messageController.text.trim();
-      sanitizedMessage = sanitizedMessage.replaceAll(RegExp(r'\n+'), '\n');
-      // if (sanitizedMessage.isNotEmpty) {
-      //   setState(() {
-      //     messages.add(sanitizedMessage);
-      //     isMyMessage.add(true);
-      //     _messageController.clear();
-      //   });
-      //   _scrollToBottom();
-      // }
+      String messageText = _messageController.text.trim();
+
+      socket.emit("send_message", {
+        "text": messageText,
+        "sent_at": DateTime.now().toIso8601String(),
+        "sent_files": [],
+        "user_id": widget.currentUser!.id,
+        "room": widget.chat.id
+      });
+
+      _messageController.clear();
+      _scrollToBottom();
     }
   }
 
@@ -78,10 +157,17 @@ class ChatPageState extends State<ChatPage> {
 
   void _deleteMessage(int index) {
     setState(() {
-      messages.removeAt(index);
+      // widget.messages.removeAt(index);
       // isMyMessage.removeAt(index);
       _selectedDeleteIndex = null;
     });
+  }
+
+  @override
+  void dispose() {
+    socket.off("load_chat_history");
+    socket.off("send_message");
+    super.dispose();
   }
 
   @override
@@ -99,7 +185,9 @@ class ChatPageState extends State<ChatPage> {
                 Navigator.push(
                   context,
                   PageRouteBuilder(
-                    pageBuilder: (context, animation, secondaryAnimation) => const ChatInfoPage(),
+                    pageBuilder: (context, animation, secondaryAnimation) => ChatInfoPage(
+                      isGroup: isGroup, users: otherUsers, chat: widget.chat,
+                    ),
                     transitionsBuilder: (context, animation, secondaryAnimation, child) {
                       const begin = Offset(1.0, 0.0);
                       const end = Offset.zero;
@@ -120,13 +208,22 @@ class ChatPageState extends State<ChatPage> {
             )
           ],
         ),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () {
+            // socket.off("send_message");
+            Navigator.pop(context, true);
+          },
+        ),
         actions: [
           GestureDetector(
             onTap: () {
               Navigator.push(
                 context,
                 PageRouteBuilder(
-                  pageBuilder: (context, animation, secondaryAnimation) => const ChatInfoPage(),
+                  pageBuilder: (context, animation, secondaryAnimation) => ChatInfoPage(
+                    isGroup: isGroup, users: otherUsers, chat: widget.chat,
+                  ),
                   transitionsBuilder: (context, animation, secondaryAnimation, child) {
                     const begin = Offset(1.0, 0.0);
                     const end = Offset.zero;
@@ -153,74 +250,85 @@ class ChatPageState extends State<ChatPage> {
         ],
         centerTitle: true,
       ),
-      body: GestureDetector(
-        onTap: () {
-          setState(() {
-            _selectedDeleteIndex = null;
-          });
-        },
-        child: Column(
-          children: [
-            Expanded(
-              child: ListView.builder(
-                controller: _scrollController,
-                itemCount: messages.length,
-                itemBuilder: (context, index) {
-
-                  return ChatMessageItem(
-                    index: messages[index].id!,
-                    message: messages[index],
-                    currentUser: widget.currentUser,
-                    chat: widget.chat,
-                    isGroup: widget.chat.isGroup!,
-                    isSelectedForDeletion: _selectedDeleteIndex == index,
-                    onDelete: () => _deleteMessage(index),
-                    onLongPress: () {
-                      if (messages[index].userId! == widget.currentUser!.id) {
-                        setState(() {
-                          _selectedDeleteIndex = index;
-                        });
-                      }
+      body: Stack(
+        children: [
+          GestureDetector(
+            onTap: () {
+              setState(() {
+                _selectedDeleteIndex = null;
+              });
+            },
+            child: Column(
+              children: [
+                const SizedBox(height: 5,),
+                Expanded(
+                  child: ListView.builder(
+                    controller: _scrollController,
+                    itemCount: chatHistory.length,
+                    itemBuilder: (context, index) {
+                      return ChatMessageItem(
+                        index: chatHistory[index].id!,
+                        message: chatHistory[index],
+                        currentUser: widget.currentUser,
+                        chat: widget.chat,
+                        isGroup: widget.chat.isGroup!,
+                        isSelectedForDeletion: _selectedDeleteIndex == index,
+                        onDelete: () => _deleteMessage(index),
+                        onLongPress: () {
+                          if (chatHistory[index].userId! == widget.currentUser!.id) {
+                            setState(() {
+                              _selectedDeleteIndex = index;
+                            });
+                          }
+                        },
+                      );
                     },
-                  );
-                },
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.attach_file),
-                    onPressed: _pickFile,
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.image),
-                    onPressed: _pickImage,
-                  ),
-                  Expanded(
-                    child: TextField(
-                      controller: _messageController,
-                      maxLines: null,
-                      keyboardType: TextInputType.multiline,
-                      decoration: InputDecoration(
-                        hintText: "${languageProvider.localizedStrings['typeMessage']}...",
-                        border: const OutlineInputBorder(),
-                        contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 15),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.attach_file),
+                        onPressed: _pickFile,
                       ),
-                      textInputAction: TextInputAction.newline,
-                      onSubmitted: (_) => _handleSend(),
-                    ),
+                      IconButton(
+                        icon: const Icon(Icons.image),
+                        onPressed: _pickImage,
+                      ),
+                      Expanded(
+                        child: TextField(
+                          controller: _messageController,
+                          maxLines: null,
+                          keyboardType: TextInputType.multiline,
+                          decoration: InputDecoration(
+                            hintText: "${languageProvider.localizedStrings['typeMessage']}...",
+                            border: const OutlineInputBorder(),
+                            contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 15),
+                          ),
+                          textInputAction: TextInputAction.newline,
+                          onSubmitted: (_) => _handleSend(),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.send),
+                        onPressed: _handleSend,
+                      ),
+                    ],
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.send),
-                    onPressed: _handleSend,
-                  ),
-                ],
+                ),
+              ],
+            ),
+          ),
+          if (isLoading)
+            Container(
+              color: Colors.black.withOpacity(0.3),
+              child: const Center(
+                child: CircularProgressIndicator(),
               ),
             ),
-          ],
-        ),
+        ],
       ),
     );
   }
@@ -249,82 +357,86 @@ class ChatMessageItem extends StatelessWidget {
     required this.onDelete,
     required this.onLongPress,
   }) : isMyMessage = message.userId == currentUser!.id,
-       user = chat.users!.where((user) => user.id == message.userId).toList()[0];
+       user = chat.users!.firstWhere((user) => user.id == message.userId);
 
   @override
   Widget build(BuildContext context) {
     var languageProvider = Provider.of<LanguageProvider>(context);
+    String formattedTime = formatDateTime(message.sendAt!);
 
     return GestureDetector(
       onLongPress: onLongPress,
       child: Align(
         alignment: isMyMessage ? Alignment.centerRight : Alignment.centerLeft,
-        child: Container(
-          margin: EdgeInsets.only(
-            left: isMyMessage ? 50 : 10,
-            right: isMyMessage ? 10 : 50,
-            top: 10,
-            bottom: 10,
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (!isMyMessage)
-                const CircleAvatar(
-                  radius: 15,
-                  backgroundImage: AssetImage('assets/letter_images/a.png'),
-                ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
-                decoration: BoxDecoration(
-                  color: isSelectedForDeletion ? Colors.red : (isMyMessage ? Colors.blueAccent : Colors.grey[300]),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: isSelectedForDeletion
-                    ? Padding(
-                        padding: const EdgeInsets.all(8.0),
-                        child: GestureDetector(
-                          onTap: onDelete,
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.delete, color: Colors.white),
-                              Text(
-                                languageProvider.localizedStrings['delete'] ?? "Delete",
-                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                              ),
-                            ],
+        child: IntrinsicWidth(
+          child: Container(
+            margin: const EdgeInsets.symmetric(vertical: 5, horizontal: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: isSelectedForDeletion
+                  ? Colors.red
+                  : (isMyMessage ? Colors.blueAccent : Colors.grey[300]),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            constraints: BoxConstraints(
+              maxWidth: MediaQuery.of(context).size.width * 0.7,
+            ),
+            child: isSelectedForDeletion
+                ? GestureDetector(
+                    onTap: onDelete,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.delete, color: Colors.white),
+                        const SizedBox(width: 5),
+                        Text(
+                          languageProvider.localizedStrings['delete'] ?? "Delete",
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
-                      )
-                    : Column(
-                        crossAxisAlignment: isMyMessage ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-                        children: [
-                          isGroup && !isMyMessage ? Text(
+                      ],
+                    ),
+                  )
+                : Column(
+                    crossAxisAlignment:
+                        isMyMessage ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                    children: [
+                      if (isGroup && !isMyMessage)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 2),
+                          child: Text(
                             "${user.name} ${user.surname}",
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               color: isMyMessage ? Colors.white : Colors.black,
                               fontSize: 14,
                             ),
-                          ) : Container(),
-                          const SizedBox(height: 5),
-                          Container(
-                            constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.5),
-                            child: SelectableText(
-                              message.text!,
-                              style: TextStyle(
-                                color: isMyMessage ? Colors.white : Colors.black87,
-                                fontSize: 16,
-                              ),
-                              maxLines: null,
+                          ),
+                        ),
+                      SelectableText(
+                        message.text!,
+                        style: TextStyle(
+                          color: isMyMessage ? Colors.white : Colors.black87,
+                          fontSize: 16,
+                        ),
+                      ),
+                      Align(
+                        alignment: Alignment.bottomRight,
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Text(
+                            formattedTime,
+                            style: TextStyle(
+                              color: isMyMessage ? Colors.white70 : Colors.black54,
+                              fontSize: 12,
                             ),
                           ),
-                        ],
+                        ),
                       ),
-              ),
-            ],
+                    ],
+                  ),
           ),
         ),
       ),

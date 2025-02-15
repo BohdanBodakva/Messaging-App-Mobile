@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:messaging_app/models/chat.dart';
-import 'package:messaging_app/models/user.dart';
 import 'package:messaging_app/pages/login.dart';
 import 'package:messaging_app/providers/language_provider.dart';
 import 'package:provider/provider.dart';

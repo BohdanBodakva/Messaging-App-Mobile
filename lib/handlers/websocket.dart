@@ -6,4 +6,3 @@ IO.Socket socket = IO.io(_socketioBackendUrl, IO.OptionBuilder()
   .setTransports(['websocket'])
   .disableAutoConnect()
   .build());
-

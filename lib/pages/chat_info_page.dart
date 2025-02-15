@@ -1,9 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:messaging_app/models/chat.dart';
+import 'package:messaging_app/models/user.dart';
 import 'package:messaging_app/providers/language_provider.dart';
 import 'package:provider/provider.dart';
 
 class ChatInfoPage extends StatelessWidget {
-  const ChatInfoPage({super.key});
+  final bool isGroup;
+  final List<User>? users;
+  final Chat chat;
+
+  const ChatInfoPage({super.key, required this.isGroup, required this.users, required this.chat});
 
   @override
   Widget build(BuildContext context) {
@@ -23,28 +29,32 @@ class ChatInfoPage extends StatelessWidget {
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
-            const CircleAvatar(
+            CircleAvatar(
               radius: 50,
-              backgroundImage: AssetImage('assets/letter_images/a.png'),
+              backgroundImage: AssetImage(isGroup ? "" : users![0].profilePhotoLink!),
             ),
             const SizedBox(height: 16),
             
-            _buildInfoRow(languageProvider.localizedStrings['name'] ?? "Name", "John"),
-            _buildInfoRow(languageProvider.localizedStrings['surname'] ?? "Surname", "Smith"),
-            _buildInfoRow(languageProvider.localizedStrings['username'] ?? "Username", "@john_smith"),
+            if (!isGroup)
+              _buildInfoRow(languageProvider.localizedStrings['name'] ?? "Name", users![0].name!),
+            if (!isGroup)
+              _buildInfoRow(languageProvider.localizedStrings['surname'] ?? "Surname", users![0].surname!),
+            if (!isGroup)
+              _buildInfoRow(languageProvider.localizedStrings['username'] ?? "Username", "@${users![0].username}"),
 
             const SizedBox(height: 20),
 
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () => _showDeleteChatDialog(context),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red,
+            if (!isGroup)
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => _showDeleteChatDialog(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red,
+                  ),
+                  child: Text(languageProvider.localizedStrings['deleteChat'] ?? "Delete Chat"),
                 ),
-                child: Text(languageProvider.localizedStrings['deleteChat'] ?? "Delete Chat"),
               ),
-            ),
           ],
         ),
       ),

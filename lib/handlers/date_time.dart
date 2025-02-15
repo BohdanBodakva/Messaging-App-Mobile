@@ -8,16 +8,17 @@ String formatDateTime(DateTime dateTime) {
     } else if (dateTime.day == now.day - 1 && dateTime.month == now.month) {
       formattedDate = 'Yesterday, ${_formatTime(dateTime)}';
     } else {
-      formattedDate = '${_formatDate(dateTime)}, ${_formatTime(dateTime)}';
+      formattedDate = '${_formatDate(dateTime, includeYear: false)}, ${_formatTime(dateTime)}';
     }
   } else {
-    formattedDate = '${_formatDate(dateTime)}, ${_formatTime(dateTime)}';
+    formattedDate = '${_formatDate(dateTime, includeYear: true)}, ${_formatTime(dateTime)}';
   }
   return formattedDate;
 }
 
-String _formatDate(DateTime dateTime) {
-  return '${dateTime.day.toString().padLeft(2, '0')}.${dateTime.month.toString().padLeft(2, '0')}.${dateTime.year}';
+String _formatDate(DateTime dateTime, {required bool includeYear}) {
+  String date = '${dateTime.day.toString().padLeft(2, '0')}.${dateTime.month.toString().padLeft(2, '0')}';
+  return includeYear ? '$date.${dateTime.year}' : date;
 }
 
 String _formatTime(DateTime dateTime) {

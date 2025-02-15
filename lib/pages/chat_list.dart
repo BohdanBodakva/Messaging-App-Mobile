@@ -1,10 +1,9 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:messaging_app/handlers/date_time.dart';
 import 'package:messaging_app/handlers/shared_prefs.dart';
 import 'package:messaging_app/handlers/websocket.dart';
 import 'package:messaging_app/models/chat.dart';
+import 'package:messaging_app/models/message.dart';
 import 'package:messaging_app/models/user.dart';
 import 'package:messaging_app/pages/chat_area.dart';
 import 'package:messaging_app/pages/group_page.dart';
@@ -13,7 +12,7 @@ import 'package:messaging_app/pages/user_page.dart';
 import 'package:messaging_app/providers/language_provider.dart';
 import 'package:provider/provider.dart';
 
-class ChatListPage extends StatefulWidget {
+class ChatListPage extends StatefulWidget  {
 
   const ChatListPage({super.key});
 
@@ -22,14 +21,9 @@ class ChatListPage extends StatefulWidget {
 }
 
 class ChatListPageState extends State<ChatListPage> {
-  User? currentUser;
   int? userId;
-
-  void setCurrentUser(User newUser) {
-    setState(() {
-      currentUser = newUser;
-    });
-  }
+  User? currentUser;
+  int? selectedChatId;
 
   bool isLoading = true;
 
@@ -51,19 +45,18 @@ class ChatListPageState extends State<ChatListPage> {
         });
       }
     });
-    performSocketConnection();
+    _performSocketConnection();
   }
 
-  void performSocketConnection() {
+  void _performSocketConnection() {
     (() async {
-      await connectToSocket();
+      await _connectToSocket();
     })();
   }
 
-  Future<void> connectToSocket() async {
-    socket.on("connect", (data) {
-      
-    });
+  Future<void> _connectToSocket() async {
+    socket.off("validate_token");
+    socket.off("load_user");
 
     socket.on('validate_token', (data) {
       final newUserId = int.parse(data['user_id'].toString());
@@ -72,33 +65,27 @@ class ChatListPageState extends State<ChatListPage> {
         userId = newUserId;
       });
 
-      print("IDIDIDIDIDIDIIIDID: $userId");
-
       socket.emit("load_user", {"user_id": userId});
     });
 
     socket.on('load_user', (data) {
-      print("SSSSSSSSSSSSSSSSSSSSS: $data");
-
       final user = User.fromJson(data['user'], includeChats: true);
-
-      
 
       setState(() {
         currentUser = user;
-        print("AAAAAAAAAAAAAAAAAAA: ${currentUser?.chats?.length}");
-      });
-
-      setState(() {
         isLoading = false;
       });
 
       socket.emit("go_online", {"user_id": userId});
+
+      for (Chat chat in currentUser!.chats!) {
+        socket.emit("join_room", {"room": chat.id});
+      }
     });
 
-    socket.on("disconnect", (data) {
-      
-    });
+    
+
+    
 
     socket.connect();
 
@@ -131,20 +118,49 @@ class ChatListPageState extends State<ChatListPage> {
 
     var languageProvider = Provider.of<LanguageProvider>(context);
 
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        title: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            GestureDetector(
-              onTap: () {
+    return Stack(
+      children: [
+        Scaffold(
+          appBar: AppBar(
+            backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+            title: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      PageRouteBuilder(
+                        pageBuilder: (context, animation, secondaryAnimation) => UserProfilePage(currentUser: currentUser,),
+                        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                          const begin = Offset(1.0, 0.0);
+                          const end = Offset.zero;
+                          const curve = Curves.easeInOut;
+
+                          var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+                          var offsetAnimation = animation.drive(tween);
+
+                          return SlideTransition(position: offsetAnimation, child: child);
+                        },
+                      ),
+                    );
+                  },
+                  child: CircleAvatar(
+                    radius: 20,
+                    backgroundImage: AssetImage(currentUser?.profilePhotoLink ?? "assets/letter_images/u.png"),
+                  ),
+                ),
+              ],
+            ),
+            leading: IconButton(
+              icon: const Icon(Icons.group_add),
+              onPressed: () {
                 Navigator.push(
                   context,
                   PageRouteBuilder(
-                    pageBuilder: (context, animation, secondaryAnimation) => UserProfilePage(currentUser: currentUser),
+                    pageBuilder: (context, animation, secondaryAnimation) => const NewGroupPage(),
                     transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                      const begin = Offset(1.0, 0.0);
+                      const begin = Offset(-1.0, 0.0);
                       const end = Offset.zero;
                       const curve = Curves.easeInOut;
 
@@ -156,148 +172,151 @@ class ChatListPageState extends State<ChatListPage> {
                   ),
                 );
               },
-              child: CircleAvatar(
-                radius: 20,
-                backgroundImage: AssetImage(currentUser?.profilePhotoLink ?? "assets/letter_images/u.png"),
-              ),
             ),
-          ],
-        ),
-        leading: IconButton(
-          icon: const Icon(Icons.group_add),
-          onPressed: () {
-            Navigator.push(
-              context,
-              PageRouteBuilder(
-                pageBuilder: (context, animation, secondaryAnimation) => const NewGroupPage(),
-                transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                  const begin = Offset(-1.0, 0.0);
-                  const end = Offset.zero;
-                  const curve = Curves.easeInOut;
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.settings),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    PageRouteBuilder(
+                      pageBuilder: (context, animation, secondaryAnimation) => UserProfilePage(currentUser: currentUser,),
+                      transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                        const begin = Offset(1.0, 0.0);
+                        const end = Offset.zero;
+                        const curve = Curves.easeInOut;
 
-                  var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
-                  var offsetAnimation = animation.drive(tween);
+                        var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+                        var offsetAnimation = animation.drive(tween);
 
-                  return SlideTransition(position: offsetAnimation, child: child);
+                        return SlideTransition(position: offsetAnimation, child: child);
+                      },
+                    ),
+                  );
                 },
               ),
-            );
-          },
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings),
-            onPressed: () {
-              Navigator.push(
-                context,
-                PageRouteBuilder(
-                  pageBuilder: (context, animation, secondaryAnimation) => UserProfilePage(currentUser: currentUser,),
-                  transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                    const begin = Offset(1.0, 0.0);
-                    const end = Offset.zero;
-                    const curve = Curves.easeInOut;
-
-                    var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
-                    var offsetAnimation = animation.drive(tween);
-
-                    return SlideTransition(position: offsetAnimation, child: child);
-                  },
-                ),
-              );
-            },
+            ],
+            centerTitle: true,
           ),
-        ],
-        centerTitle: true,
-      ),
-      body: Stack(
-        children: [
-          Column(
+          body: Stack(
             children: [
-              const SizedBox(height: 10),
-              AnimatedOpacity(
-                duration: const Duration(milliseconds: 300),
-                opacity: _showSearchBar ? 1.0 : 0.0,
-                child: Visibility(
-                  visible: _showSearchBar,
-                  child: Container(
-                    width: 300,
-                    height: 50,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: TextField(
-                      controller: _searchController,
-                      decoration: InputDecoration(
-                        prefixIcon: const Icon(Icons.search, color: Colors.grey),
-                        hintText: languageProvider.localizedStrings['searchUsers'] ?? "Search users",
-                        hintStyle: const TextStyle(color: Colors.grey),
-                        border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(vertical: 15, horizontal: 10),
-                        suffixIcon: IconButton(
-                          icon: const Icon(Icons.clear, color: Colors.grey),
-                          onPressed: () {
-                            _searchController.clear();
-                          },
+              Column(
+                children: [
+                  const SizedBox(height: 10),
+                  AnimatedOpacity(
+                    duration: const Duration(milliseconds: 300),
+                    opacity: _showSearchBar ? 1.0 : 0.0,
+                    child: Visibility(
+                      visible: _showSearchBar,
+                      child: Container(
+                        width: 300,
+                        height: 50,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: TextField(
+                          controller: _searchController,
+                          decoration: InputDecoration(
+                            prefixIcon: const Icon(Icons.search, color: Colors.grey),
+                            hintText: languageProvider.localizedStrings['searchUsers'] ?? "Search users",
+                            hintStyle: const TextStyle(color: Colors.grey),
+                            border: InputBorder.none,
+                            contentPadding: const EdgeInsets.symmetric(vertical: 15, horizontal: 10),
+                            suffixIcon: IconButton(
+                              icon: const Icon(Icons.clear, color: Colors.grey),
+                              onPressed: () {
+                                _searchController.clear();
+                              },
+                            ),
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-              ),
-              const SizedBox(height: 10),
-              Expanded(
-                child: ListView.builder(
-                  controller: _scrollController,
-                  itemCount: currentUser?.chats?.length ?? 0,
-                  itemBuilder: (context, index) {
-                    final chat = currentUser?.chats?[index];
+                  const SizedBox(height: 10),
+                  Expanded(
+                    child: ListView.builder(
+                      controller: _scrollController,
+                      itemCount: currentUser?.chats?.length ?? 0,
+                      itemBuilder: (context, index) {
+                        final Chat chat = currentUser?.chats?[index];
 
-                    return GestureDetector(
-                      behavior: HitTestBehavior.translucent,
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          PageRouteBuilder(
-                            pageBuilder: (context, animation, secondaryAnimation) => ChatPage(chat: chat, currentUser: currentUser),
-                            transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                              const begin = Offset(1.0, 0.0);
-                              const end = Offset.zero;
-                              const curve = Curves.easeInOut;
+                        return GestureDetector(
+                          behavior: HitTestBehavior.translucent,
+                          onTap: () async {
+                            setState(() {
+                              selectedChatId = chat.id;
+                            });
 
-                              var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
-                              var offsetAnimation = animation.drive(tween);
+                            final result = await Navigator.push(
+                              context,
+                              PageRouteBuilder(
+                                pageBuilder: (context, animation, secondaryAnimation) => ChatPage(chat: chat, currentUser: currentUser,),
+                                transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                                  const begin = Offset(1.0, 0.0);
+                                  const end = Offset.zero;
+                                  const curve = Curves.easeInOut;
 
-                              return SlideTransition(position: offsetAnimation, child: child);
-                            },
+                                  var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+                                  var offsetAnimation = animation.drive(tween);
+
+                                  return SlideTransition(position: offsetAnimation, child: child);
+                                },
+                              ),
+                            );
+
+                            if (result == true) {
+                              socket.off("send_message");
+
+                              socket.on("send_message", (data) {
+                                final message = Message.fromJson(data['message']);
+                                final room = data['room'];
+
+                                User newUser = currentUser!;
+                                newUser.chats = [
+                                  newUser.chats!.where((c) => c.id == room).first, 
+                                  ...newUser.chats!.where((c) => c.id != room)
+                                ];
+                                newUser.chats![0].messages = [message];
+
+                                setState(() {
+                                  currentUser = newUser;
+                                });
+
+                                // MAKE NOTIFICATION
+                                
+                              });
+                            }
+
+                          },
+                          child: AbsorbPointer(
+                            child: ChatItem(index: index, chat: chat, currentUser: currentUser,), 
                           ),
                         );
                       },
-                      child: AbsorbPointer(
-                        child: ChatItem(index: index, chat: chat, currentUser: currentUser,), 
-                      ),
-                    );
-                  },
-                ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
-          if (isLoading)
-            Container(
-              color: Colors.black.withOpacity(0.3),
-              child: const Center(
-                child: CircularProgressIndicator(),
-              ),
+        ),
+        if (isLoading)
+          Container(
+            color: Colors.black.withOpacity(0.3),
+            child: const Center(
+              child: CircularProgressIndicator(),
             ),
-        ],
-      ),
+          ),
+      ],
     );
   }
 }
 
 class ChatItem extends StatelessWidget {
   final int index;
-  final Chat chat;
+  final Chat? chat;
   final User? currentUser;
 
   const ChatItem({super.key, required this.index, required this.chat, required this.currentUser});
@@ -306,37 +325,37 @@ class ChatItem extends StatelessWidget {
   Widget build(BuildContext context) {
     var languageProvider = Provider.of<LanguageProvider>(context);
 
-    List<User>? otherUsers = chat.users!.where((user) => user.id != currentUser!.id).toList();
-    String chatName = chat.isGroup == true ? chat.name! : otherUsers[0].name!;
+    List<User>? otherUsers = chat!.users!.where((user) => user.id != currentUser!.id).toList();
+    String chatName = chat!.isGroup == true ? chat!.name! : otherUsers[0].name!;
 
     String lastmessageText = "";
-    if (chat.messages!.isNotEmpty) {
-      lastmessageText = chat.messages![0].text!;
+    if (chat!.messages!.isNotEmpty) {
+      lastmessageText = chat!.messages![0].text!;
     }
 
     String? lastmessageSendTime;
-    if (chat.messages!.isNotEmpty) {
-      lastmessageSendTime = formatDateTime(chat.messages![0].sendAt!);
+    if (chat!.messages!.length == 1 && chat!.messages![0].isHidden == false) {
+      lastmessageSendTime = formatDateTime(chat!.messages![0].sendAt!);
     }
 
     return ListTile(
       leading: CircleAvatar(
         radius: 30,
         backgroundImage: AssetImage(
-          chat.isGroup == true ? chat.chatPhotoLink! : otherUsers[0].profilePhotoLink!
+          chat!.isGroup == true ? chat!.chatPhotoLink! : otherUsers[0].profilePhotoLink!
         ),
       ),
       title: Text(chatName, style: const TextStyle(fontWeight: FontWeight.bold)),
-      subtitle: chat.isGroup == true ? Container() : Column(
+      subtitle: chat!.isGroup == true ? Container() : Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            chat.isGroup == true ? "" : otherUsers[0].username!, 
+            chat!.isGroup == true ? "" : otherUsers[0].username!, 
             style: const TextStyle(color: Colors.grey, fontSize: 12)
           ),
           const SizedBox(height: 5),
           Text(
-            chat.isGroup != true && otherUsers[0].isOnline! == true ? 
+            chat!.isGroup != true && otherUsers[0].isOnline! == true ? 
               languageProvider.localizedStrings["online"] ?? "Online" : "",
             style: const TextStyle(fontSize: 12, color: Colors.green),
           )

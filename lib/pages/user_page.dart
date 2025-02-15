@@ -7,9 +7,9 @@ import 'package:messaging_app/providers/language_provider.dart';
 import 'package:provider/provider.dart';
 
 class UserProfilePage extends StatefulWidget {
-  User? currentUser;
+  final User? currentUser;
 
-  UserProfilePage({super.key, required this.currentUser});
+  const UserProfilePage({super.key, required this.currentUser});
 
   @override
   UserProfilePageState createState() => UserProfilePageState();
@@ -26,9 +26,9 @@ class UserProfilePageState extends State<UserProfilePage> {
    @override
   void initState() {
     super.initState();
-    _nameController = TextEditingController(text: widget.currentUser?.name ?? "");
-    _surnameController = TextEditingController(text: widget.currentUser?.surname ?? "");
-    _usernameController = TextEditingController(text: widget.currentUser?.username ?? "");
+    _nameController = TextEditingController(text: widget.currentUser!.name ?? "");
+    _surnameController = TextEditingController(text: widget.currentUser!.surname ?? "");
+    _usernameController = TextEditingController(text: widget.currentUser!.username ?? "");
   }
 
   Future<void> _pickImage() async {
