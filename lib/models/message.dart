@@ -43,6 +43,19 @@ class Message {
     );
   }
 
+  Message deepCopy() {
+    return Message(
+      id: this.id,
+      text: this.text!,
+      sentFiles: this.sentFiles?.map((file) => file.deepCopy()).toList(), 
+      sendAt: this.sendAt,
+      usersThatUnread: this.usersThatUnread?.map((user) => user.deepCopy()).toList(), 
+      isHidden: this.isHidden,
+      userId: this.userId,
+      chatId: this.chatId,
+    );
+  }
+
   Map<String, dynamic> toJson() {
     return {
       'id': id,

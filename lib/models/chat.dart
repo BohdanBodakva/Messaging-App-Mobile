@@ -43,6 +43,19 @@ class Chat {
     );
   }
 
+  Chat deepCopy() {
+    return Chat(
+      id: this.id,
+      name: this.name!,
+      createdAt: this.createdAt,
+      adminId: this.adminId,
+      users: this.users?.map((user) => user.deepCopy()).toList(), 
+      chatPhotoLink: this.chatPhotoLink,
+      isGroup: this.isGroup,
+      messages: this.messages?.map((msg) => msg.deepCopy()).toList(), 
+    );
+  }
+
   Map<String, dynamic> toJson() {
     return {
       'id': id,

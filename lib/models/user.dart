@@ -49,6 +49,19 @@ class User {
     return user;
   }
 
+  User deepCopy() {
+    return User(
+      id: this.id,
+      name: this.name!,
+      surname: this.surname,
+      username: this.username!,
+      profilePhotoLink: this.profilePhotoLink,
+      isOnline: this.isOnline,
+      chats: this.chats?.map((chat) => chat.deepCopy()).toList(), 
+      unreadMessages: List.from(this.unreadMessages!), 
+    );
+  }
+
   Map<String, dynamic> toJson() {
     return {
       'id': id,
@@ -57,7 +70,7 @@ class User {
       'username': username,
       'profile_photo_link': profilePhotoLink,
       'last_seen': isOnline,
-      'chats': chats?.map((chat) => Chat.fromJson(chat)).toList() ?? [],
+      // 'chats': chats?.map((chat) => ).toList() ?? [],
       'unread_messages': unreadMessages,
     };
   }

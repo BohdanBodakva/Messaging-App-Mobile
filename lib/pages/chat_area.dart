@@ -13,8 +13,9 @@ import 'package:provider/provider.dart';
 class ChatPage extends StatefulWidget {
   final Chat chat;
   User? currentUser;
+  Function setCurrentUser;
 
-  ChatPage({super.key, required this.chat, required this.currentUser});
+  ChatPage({super.key, required this.chat, required this.currentUser, required this.setCurrentUser});
 
   @override
   ChatPageState createState() => ChatPageState();
@@ -23,6 +24,9 @@ class ChatPage extends StatefulWidget {
 class ChatPageState extends State<ChatPage> {
   bool isListening = false;
   bool isLoading = true;
+
+  User? currentUserChatPage;
+  Chat? currentChat;
 
   List<Message> chatHistory = [];
   final itemsCount = 15;
@@ -39,13 +43,17 @@ class ChatPageState extends State<ChatPage> {
   @override
   void initState() {
     super.initState();
-    isGroup = widget.chat.isGroup!;
-    otherUsers = widget.chat.users!.where((user) => user.id != widget.currentUser!.id).toList();
-    chatName = widget.chat.isGroup == true ? widget.chat.name! : otherUsers![0].name!;
+
+    setState(() {
+      currentUserChatPage = widget.currentUser!.deepCopy();
+      currentChat = widget.chat.deepCopy();
+    });
+
+    isGroup = currentChat!.isGroup!;
+    otherUsers = currentChat!.users!.where((user) => user.id != currentUserChatPage!.id).toList();
+    chatName = currentChat!.isGroup == true ? currentChat!.name! : otherUsers![0].name!;
     
     _loadChatHistory();
-
-    
   }
 
   _loadChatHistory(){
@@ -87,7 +95,7 @@ class ChatPageState extends State<ChatPage> {
       final message = Message.fromJson(data['message']);
       final room = data['room'];
 
-      User newUser = widget.currentUser!;
+      User newUser = currentUserChatPage!.deepCopy();
       newUser.chats = [
         newUser.chats!.where((c) => c.id == room).first, 
         ...newUser.chats!.where((c) => c.id != room)
@@ -96,11 +104,12 @@ class ChatPageState extends State<ChatPage> {
 
       if (!mounted) return;
 
+      widget.setCurrentUser(newUser);
       setState(() {
         widget.currentUser = newUser;
       });
 
-      if (widget.chat.id == room) {
+      if (currentChat!.id == room) {
         setState(() {
           chatHistory = [...chatHistory, message];
         });
@@ -124,7 +133,7 @@ class ChatPageState extends State<ChatPage> {
     });
 
     socket.emit("load_chat_history", {
-      "chat_id": widget.chat.id,
+      "chat_id": currentChat!.id,
       "items_count": itemsCount,
       "offset": loadHistoryOffset
     });
@@ -158,8 +167,8 @@ class ChatPageState extends State<ChatPage> {
         "text": messageText,
         "sent_at": DateTime.now().toIso8601String(),
         "sent_files": [],
-        "user_id": widget.currentUser!.id,
-        "room": widget.chat.id
+        "user_id": currentUserChatPage!.id,
+        "room": currentChat!.id
       });
 
       _messageController.clear();
@@ -178,7 +187,7 @@ class ChatPageState extends State<ChatPage> {
   void _deleteMessage(int index) {
     socket.emit("delete_message", {
       "message_id": index,
-      "room": widget.chat.id
+      "room": currentChat!.id
     });
   }
 
@@ -208,7 +217,7 @@ class ChatPageState extends State<ChatPage> {
                   context,
                   PageRouteBuilder(
                     pageBuilder: (context, animation, secondaryAnimation) => ChatInfoPage(
-                      isGroup: isGroup, users: otherUsers, chat: widget.chat,
+                      isGroup: isGroup, users: otherUsers, chat: currentChat!,
                     ),
                     transitionsBuilder: (context, animation, secondaryAnimation, child) {
                       const begin = Offset(1.0, 0.0);
@@ -246,7 +255,7 @@ class ChatPageState extends State<ChatPage> {
                 context,
                 PageRouteBuilder(
                   pageBuilder: (context, animation, secondaryAnimation) => ChatInfoPage(
-                    isGroup: isGroup, users: otherUsers, chat: widget.chat,
+                    isGroup: isGroup, users: otherUsers, chat: currentChat!,
                   ),
                   transitionsBuilder: (context, animation, secondaryAnimation, child) {
                     const begin = Offset(1.0, 0.0);
@@ -266,7 +275,7 @@ class ChatPageState extends State<ChatPage> {
               child: CircleAvatar(
                 radius: 20,
                 backgroundImage: AssetImage(
-                  isGroup ? widget.chat.chatPhotoLink! : otherUsers![0].profilePhotoLink!
+                  isGroup ? currentChat!.chatPhotoLink! : otherUsers![0].profilePhotoLink!
                 ),
               ),
             )
@@ -293,13 +302,13 @@ class ChatPageState extends State<ChatPage> {
                       return ChatMessageItem(
                         index: chatHistory[index].id!,
                         message: chatHistory[index],
-                        currentUser: widget.currentUser,
-                        chat: widget.chat,
-                        isGroup: widget.chat.isGroup!,
+                        currentUser: currentUserChatPage!,
+                        chat: currentChat!,
+                        isGroup: currentChat!.isGroup!,
                         isSelectedForDeletion: _selectedDeleteIndex == chatHistory[index].id!,
                         onDelete: () => _deleteMessage(chatHistory[index].id!),
                         onLongPress: () {
-                          if (chatHistory[index].userId! == widget.currentUser!.id) {
+                          if (chatHistory[index].userId! == currentUserChatPage!.id) {
                             setState(() {
                               _selectedDeleteIndex = chatHistory[index].id!;
                             });

@@ -17,6 +17,14 @@ class SentFile {
     );
   }
 
+  SentFile deepCopy() {
+    return SentFile(
+      id: this.id,
+      fileLink: this.fileLink!,
+      messageId: this.messageId,
+    );
+  }
+
   Map<String, dynamic> toJson() {
     return {
       'id': id,

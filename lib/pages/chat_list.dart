@@ -20,7 +20,7 @@ class ChatListPage extends StatefulWidget  {
   ChatListPageState createState() => ChatListPageState();
 }
 
-class ChatListPageState extends State<ChatListPage> {
+class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver {
   int? userId;
   User? currentUser;
   int? selectedChatId;
@@ -33,6 +33,20 @@ class ChatListPageState extends State<ChatListPage> {
     });
   }
 
+  void updateUserOnlineStatus(int userId, bool isOnline) {
+    if (currentUser?.chats == null) return;
+
+    setState(() {
+      for (var chat in currentUser!.chats!) {
+        for (var user in chat.users) {
+          if (user.id == userId) {
+            user.isOnline = isOnline;
+          }
+        }
+      }
+    });
+  }
+
   bool isLoading = true;
 
   final ScrollController _scrollController = ScrollController();
@@ -42,6 +56,8 @@ class ChatListPageState extends State<ChatListPage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+
     _scrollController.addListener(() {
       if (_scrollController.offset <= 0) {
         setState(() {
@@ -97,6 +113,16 @@ class ChatListPageState extends State<ChatListPage> {
       socket.emit("load_user", {"user_id": userId});
     });
 
+    socket.on("set_status", (data) {
+      final isOnline = data["is_online"].toString().toLowerCase() == "true";
+      final userId = data["user_id"];
+
+      if (currentUser!.id != userId) {
+        updateUserOnlineStatus(userId, isOnline);
+      }
+
+    });
+
     socket.on('load_user', (data) {
       final user = User.fromJson(data['user'], includeChats: true);
 
@@ -105,7 +131,7 @@ class ChatListPageState extends State<ChatListPage> {
         isLoading = false;
       });
 
-      socket.emit("go_online", {"user_id": userId});
+      socket.emit("go_online", {"user_id": currentUser!.id});
 
       for (Chat chat in currentUser!.chats!) {
         socket.emit("join_room", {"room": chat.id});
@@ -192,25 +218,26 @@ class ChatListPageState extends State<ChatListPage> {
 
     socket.on("create_chat", (data) {
       final currentUserId = data["current_user_id"];
-      final chat = Chat.fromJson(data["chat"]);
       final users = (data["users"] as List).map((u) => User.fromJson(u)).toList();
-
       final userIds = users.map((u) => u.id).toList();
+      final chat = Chat.fromJson(data["chat"]);
 
       if (currentUserId == currentUser!.id) {
-        User user = currentUser!;
+        socket.emit("join_room", {"room": chat.id});
+
+        User user = currentUser!.deepCopy();
         user.chats = [chat, ...user.chats!];
 
         setCurrentUser(user);
 
-      } else if (!userIds.contains(currentUserId)) {
-        return;
-      }
+        // socket.emit("load_user_chats", {
+        //   "user_id": currentUser!.id
+        // });
 
-      Navigator.push(
+        Navigator.push(
           context,
           PageRouteBuilder(
-            pageBuilder: (context, animation, secondaryAnimation) => ChatPage(chat: chat, currentUser: currentUser,),
+            pageBuilder: (context, animation, secondaryAnimation) => ChatPage(chat: chat, currentUser: currentUser, setCurrentUser: setCurrentUser),
             transitionsBuilder: (context, animation, secondaryAnimation, child) {
               const begin = Offset(1.0, 0.0);
               const end = Offset.zero;
@@ -223,6 +250,16 @@ class ChatListPageState extends State<ChatListPage> {
             },
           )
         );
+
+      } else if (userIds.contains(currentUser!.id)) {
+        socket.emit("join_room", {"room": chat.id});
+        
+        socket.emit("load_user_chats", {
+          "user_id": currentUser!.id
+        });
+      }
+
+      
 
     });
 
@@ -242,9 +279,26 @@ class ChatListPageState extends State<ChatListPage> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
+      _sendOfflineStatus();
+    }
+  }
+
+  void _sendOfflineStatus() {
+    if (socket.connected) {
+      socket.emit("go_offline", {"user_id": currentUser!.id});
+
+      Future.delayed(const Duration(milliseconds: 300), () {
+        socket.disconnect();
+      });
+    }
+  }
+
+  @override
   void dispose() {
-    socket.emit("go_offline", {"user_id": userId});
-    socket.disconnect();
+    WidgetsBinding.instance.removeObserver(this);
+    socket.dispose();
     super.dispose();
   }
 
@@ -266,12 +320,38 @@ class ChatListPageState extends State<ChatListPage> {
     });
     _searchController.clear();
 
-    socket.emit("create_chat", {
-      "current_user_id": currentUser!.id,
-      "user_ids": [userId],
-      "is_group": false,
-      "created_at": DateTime.now().toIso8601String()
-    });
+    final userIdsList = currentUser!.chats!.expand((chat) => chat.users).map((user) => user.id!).toSet().toList();
+    if (userIdsList.contains(userId)) {
+      Chat? chatWithUser = currentUser!.chats!.firstWhere(
+        (chat) => chat.users.length == 2 && chat.users.any((user) => user.id == userId),
+        orElse: () => null
+      );
+
+      Navigator.push(
+        context,
+        PageRouteBuilder(
+          pageBuilder: (context, animation, secondaryAnimation) => ChatPage(chat: chatWithUser!, currentUser: currentUser, setCurrentUser: setCurrentUser),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            const begin = Offset(1.0, 0.0);
+            const end = Offset.zero;
+            const curve = Curves.easeInOut;
+
+            var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+            var offsetAnimation = animation.drive(tween);
+
+            return SlideTransition(position: offsetAnimation, child: child);
+          },
+        )
+      );
+
+    } else {
+      socket.emit("create_chat", {
+        "current_user_id": currentUser!.id,
+        "user_ids": [userId],
+        "is_group": false,
+        "created_at": DateTime.now().toIso8601String()
+      });
+    }
   }
 
   @override
@@ -468,7 +548,7 @@ class ChatListPageState extends State<ChatListPage> {
                             Navigator.push(
                               context,
                               PageRouteBuilder(
-                                pageBuilder: (context, animation, secondaryAnimation) => ChatPage(chat: chat, currentUser: currentUser,),
+                                pageBuilder: (context, animation, secondaryAnimation) => ChatPage(chat: chat, currentUser: currentUser, setCurrentUser: setCurrentUser),
                                 transitionsBuilder: (context, animation, secondaryAnimation, child) {
                                   const begin = Offset(1.0, 0.0);
                                   const end = Offset.zero;
@@ -518,7 +598,7 @@ class ChatItem extends StatelessWidget {
     var languageProvider = Provider.of<LanguageProvider>(context);
 
     List<User>? otherUsers = chat!.users!.where((user) => user.id != currentUser!.id).toList();
-    String chatName = chat!.isGroup == true ? chat!.name! : otherUsers[0].name!;
+    String chatName = chat!.isGroup == true ? chat!.name! : "${otherUsers[0].name!} ${otherUsers[0].surname!}";
 
     String lastmessageText = "";
     if (chat!.messages!.isNotEmpty) {
