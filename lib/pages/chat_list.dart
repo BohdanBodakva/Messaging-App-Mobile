@@ -25,6 +25,12 @@ class ChatListPageState extends State<ChatListPage> {
   User? currentUser;
   int? selectedChatId;
 
+  void setCurrentUser(User? user) {
+    setState(() {
+      currentUser = user;
+    });
+  }
+
   bool isLoading = true;
 
   final ScrollController _scrollController = ScrollController();
@@ -58,6 +64,27 @@ class ChatListPageState extends State<ChatListPage> {
     socket.off("validate_token");
     socket.off("load_user");
 
+    socket.on('validate_token_error', (data) {
+      socket.disconnect();
+
+      Navigator.push(
+        context,
+        PageRouteBuilder(
+          pageBuilder: (context, animation, secondaryAnimation) => const LoginPage(),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            const begin = Offset(1.0, 0.0);
+            const end = Offset.zero;
+            const curve = Curves.easeInOut;
+
+            var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+            var offsetAnimation = animation.drive(tween);
+
+            return SlideTransition(position: offsetAnimation, child: child);
+          },
+        ),
+      );
+    });
+
     socket.on('validate_token', (data) {
       final newUserId = int.parse(data['user_id'].toString());
 
@@ -83,9 +110,56 @@ class ChatListPageState extends State<ChatListPage> {
       }
     });
 
-    
+    socket.on("send_message_chat_list", (data) {
+      final message = Message.fromJson(data['message']);
+      final room = data['room'];
 
-    
+      User newUser = currentUser!;
+      newUser.chats = [
+        newUser.chats!.where((c) => c.id == room).first, 
+        ...newUser.chats!.where((c) => c.id != room)
+      ];
+      newUser.chats![0].messages = [message];
+
+      setState(() {
+        currentUser = newUser;
+      });
+
+      // MAKE NOTIFICATION
+      
+    });
+
+    socket.on("delete_message_chat_list", (data) {
+      final messageId = data['message_id'];
+      final chatId = data['chat_id'];
+      var lastChatMessage = data['last_chat_message'];
+
+      Chat? chat = currentUser!.chats!.where((c) => c.id == chatId).first;
+
+      if (lastChatMessage != null) {
+        lastChatMessage = Message.fromJson(lastChatMessage);
+
+        chat!.messages = [lastChatMessage];
+
+        User newUser = currentUser!;
+        newUser.chats![newUser.chats!.indexOf(chat)] = chat;
+
+        currentUser!.chats!.sort((a, b) {
+          DateTime? aLatest = a.messages.isNotEmpty ? a.messages.last.sendAt : null;
+          DateTime? bLatest = b.messages.isNotEmpty ? b.messages.last.sendAt : null;
+
+          if (aLatest == null && bLatest == null) return 0;
+          if (aLatest == null) return 1;
+          if (bLatest == null) return -1;
+
+          return bLatest.compareTo(aLatest);
+        });
+
+        setState(() {
+          currentUser = newUser;
+        });
+      }
+    });
 
     socket.connect();
 
@@ -100,7 +174,6 @@ class ChatListPageState extends State<ChatListPage> {
       );
     }
 
-    
   }
 
   @override
@@ -131,7 +204,7 @@ class ChatListPageState extends State<ChatListPage> {
                     Navigator.push(
                       context,
                       PageRouteBuilder(
-                        pageBuilder: (context, animation, secondaryAnimation) => UserProfilePage(currentUser: currentUser,),
+                        pageBuilder: (context, animation, secondaryAnimation) => UserProfilePage(currentUser: currentUser, setCurrentUser: setCurrentUser),
                         transitionsBuilder: (context, animation, secondaryAnimation, child) {
                           const begin = Offset(1.0, 0.0);
                           const end = Offset.zero;
@@ -180,7 +253,7 @@ class ChatListPageState extends State<ChatListPage> {
                   Navigator.push(
                     context,
                     PageRouteBuilder(
-                      pageBuilder: (context, animation, secondaryAnimation) => UserProfilePage(currentUser: currentUser,),
+                      pageBuilder: (context, animation, secondaryAnimation) => UserProfilePage(currentUser: currentUser, setCurrentUser: setCurrentUser),
                       transitionsBuilder: (context, animation, secondaryAnimation, child) {
                         const begin = Offset(1.0, 0.0);
                         const end = Offset.zero;
@@ -249,7 +322,7 @@ class ChatListPageState extends State<ChatListPage> {
                               selectedChatId = chat.id;
                             });
 
-                            final result = await Navigator.push(
+                            Navigator.push(
                               context,
                               PageRouteBuilder(
                                 pageBuilder: (context, animation, secondaryAnimation) => ChatPage(chat: chat, currentUser: currentUser,),
@@ -265,30 +338,6 @@ class ChatListPageState extends State<ChatListPage> {
                                 },
                               ),
                             );
-
-                            if (result == true) {
-                              socket.off("send_message");
-
-                              socket.on("send_message", (data) {
-                                final message = Message.fromJson(data['message']);
-                                final room = data['room'];
-
-                                User newUser = currentUser!;
-                                newUser.chats = [
-                                  newUser.chats!.where((c) => c.id == room).first, 
-                                  ...newUser.chats!.where((c) => c.id != room)
-                                ];
-                                newUser.chats![0].messages = [message];
-
-                                setState(() {
-                                  currentUser = newUser;
-                                });
-
-                                // MAKE NOTIFICATION
-                                
-                              });
-                            }
-
                           },
                           child: AbsorbPointer(
                             child: ChatItem(index: index, chat: chat, currentUser: currentUser,), 

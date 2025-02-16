@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
+import 'package:messaging_app/handlers/shared_prefs.dart';
+import 'package:messaging_app/handlers/websocket.dart';
 import 'package:messaging_app/models/user.dart';
 import 'package:messaging_app/pages/login.dart';
 import 'package:messaging_app/providers/language_provider.dart';
@@ -8,14 +10,19 @@ import 'package:provider/provider.dart';
 
 class UserProfilePage extends StatefulWidget {
   final User? currentUser;
+  final Function setCurrentUser;
 
-  const UserProfilePage({super.key, required this.currentUser});
+  const UserProfilePage({super.key, required this.currentUser, required this.setCurrentUser});
 
   @override
   UserProfilePageState createState() => UserProfilePageState();
 }
 
 class UserProfilePageState extends State<UserProfilePage> {
+  User? profileUser;
+
+  bool isLoading = false;
+
   File? _image;
   final _picker = ImagePicker();
 
@@ -23,12 +30,71 @@ class UserProfilePageState extends State<UserProfilePage> {
   late TextEditingController _surnameController;
   late TextEditingController _usernameController;
 
+  bool isNameInputValid = true;
+  bool isUsernameInputValid = true;
+  bool isUsernameExist = false;
+
    @override
   void initState() {
     super.initState();
-    _nameController = TextEditingController(text: widget.currentUser!.name ?? "");
-    _surnameController = TextEditingController(text: widget.currentUser!.surname ?? "");
-    _usernameController = TextEditingController(text: widget.currentUser!.username ?? "");
+
+    setState(() {
+      profileUser = widget.currentUser!;
+    });
+
+    _nameController = TextEditingController(text: profileUser!.name ?? "");
+    _surnameController = TextEditingController(text: profileUser!.surname ?? "");
+    _usernameController = TextEditingController(text: profileUser!.username ?? "");
+
+    _setupSocketEvents();
+  }
+
+  // @override
+  // void didUpdateWidget(covariant UserProfilePage oldWidget) {
+  //   super.didUpdateWidget(oldWidget);
+  //   setState(() {
+  //     profileUser = widget.currentUser!;
+  //   });
+  // }
+
+  void _setupSocketEvents() {
+    (() async {
+      await _defineSocketEvents();
+    })();
+  }
+
+  Future<void> _defineSocketEvents() async {
+    socket.on("change_user_info", (data) {
+      final newUser = User.fromJson(data["user"], includeChats: false);
+
+      if (widget.currentUser!.id == newUser.id) {
+        User user = profileUser!;
+
+        user.name = newUser.name;
+        user.surname = newUser.surname;
+        user.username = newUser.username;
+        user.profilePhotoLink = newUser.profilePhotoLink;
+
+        widget.setCurrentUser(user);
+        setState(() {
+          profileUser = user;
+        });
+      } else {
+        
+      }
+      
+
+      // socket.emit(event)
+    });
+
+    socket.on("change_user_info_username_exists", (data) {
+      setState(() {
+        isUsernameExist = true;
+        isLoading = false;
+        isNameInputValid = true;
+        isUsernameInputValid = true;
+      });
+    });
   }
 
   Future<void> _pickImage() async {
@@ -48,7 +114,9 @@ class UserProfilePageState extends State<UserProfilePage> {
         content: Text(languageProvider.localizedStrings['logoutConfirmMessage'] ?? "Are you sure you want to log out?"),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: Text(languageProvider.localizedStrings['cancel'] ?? "Cancel")),
-          ElevatedButton(onPressed: () {
+          ElevatedButton(onPressed: () async {
+              await deleteDataFromStorage("accessToken");
+
               Navigator.push(
                 context,
                 PageRouteBuilder(
@@ -163,18 +231,89 @@ class UserProfilePageState extends State<UserProfilePage> {
   }
 
   Widget _buildTextField(TextEditingController controller, String label, {bool obscureText = false}) {
+    var languageProvider = Provider.of<LanguageProvider>(context);
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: TextField(
-        controller: controller,
-        obscureText: obscureText,
-        decoration: InputDecoration(
-          labelText: label,
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-          contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 15),
-        ),
-      ),
+      child: Column(
+        children: [
+          TextField(
+            controller: controller,
+            obscureText: obscureText,
+            decoration: InputDecoration(
+              labelText: label,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+              contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 15),
+            ),
+          ),
+          Visibility(
+            visible: controller == _nameController ? !isNameInputValid : !isUsernameInputValid,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 5.0, left: 5.0),
+              child: Text(
+                languageProvider.localizedStrings['fieldCannotBeEmpty'] ?? 'The filed cannot be empty', 
+                style: const TextStyle(color: Colors.red, fontSize: 12),
+              ),
+            ),
+          ),
+          Visibility(
+            visible: isUsernameExist && controller == _usernameController,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 5.0, left: 5.0),
+              child: Text(
+                languageProvider.localizedStrings['userAlreadyExists'] ?? 'User with such username already exists', 
+                style: const TextStyle(color: Colors.red, fontSize: 12),
+              ),
+            ),
+          ),
+        ],
+      )
     );
+  }
+
+  void saveUserInfo() {
+    setState(() {
+      isUsernameExist = false;
+      isLoading = true;
+      isNameInputValid = true;
+      isUsernameInputValid = true;
+    });
+
+    final name = _nameController.text;
+    final surname = _surnameController.text;
+    final username = _usernameController.text;
+
+    print("PPPPPPPPPPPPPPPPPPP: $name-$surname-$username");
+
+    if (name.isEmpty) {
+      setState(() {
+        isNameInputValid = false;
+      });
+    } else if (username.isEmpty) {
+      setState(() {
+        isUsernameInputValid = false;
+      });
+    } else {
+      socket.emit("change_user_info", {
+        "user_id": profileUser!.id,
+        "new_name": name,
+        "new_surname": surname,
+        "new_username": username,
+        "new_profile_photo_link": null
+      });
+    }
+
+    setState(() {
+      isLoading = false;
+    });
+  }
+
+  @override
+  void dispose() {
+    socket.off("change_user_info");
+    socket.off("change_user_info_username_exists");
+
+    super.dispose();
   }
 
   @override
@@ -191,41 +330,53 @@ class UserProfilePageState extends State<UserProfilePage> {
           IconButton(icon: const Icon(Icons.logout, color: Colors.red), onPressed: () {_logout(languageProvider);}),
         ],
       ),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            children: [
-              GestureDetector(
-                onTap: _pickImage,
-                child: CircleAvatar(
-                  radius: 50,
-                  backgroundImage: AssetImage(widget.currentUser!.profilePhotoLink!),
-                ),
+      body: Stack(
+        children: [
+          SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                children: [
+                  GestureDetector(
+                    onTap: _pickImage,
+                    child: CircleAvatar(
+                      radius: 50,
+                      backgroundImage: AssetImage(profileUser!.profilePhotoLink!),
+                    ),
+                  ),
+                  _buildTextField(_nameController, languageProvider.localizedStrings['name'] ?? "Name"),
+                  _buildTextField(_surnameController, languageProvider.localizedStrings['surname'] ?? "Surname"),
+                  _buildTextField(_usernameController, languageProvider.localizedStrings['username'] ?? "Username"),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(onPressed: saveUserInfo, child: Text(languageProvider.localizedStrings['save'] ?? "Save")),
+                  ),
+                  const SizedBox(height: 10),
+                  ListTile(
+                    leading: const Icon(Icons.settings),
+                    title: Text(languageProvider.localizedStrings['settings'] ?? "Settings"),
+                    onTap: () {_showSettingsDialog(languageProvider);},
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.lock),
+                    title: Text(languageProvider.localizedStrings['changePassword'] ?? "Change Password"),
+                    onTap: () {_showChangePasswordDialog(languageProvider);},
+                  ),
+                ],
               ),
-              _buildTextField(_nameController, languageProvider.localizedStrings['name'] ?? "Name"),
-              _buildTextField(_surnameController, languageProvider.localizedStrings['surname'] ?? "Surname"),
-              _buildTextField(_usernameController, languageProvider.localizedStrings['username'] ?? "Username"),
-              const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(onPressed: () {}, child: Text(languageProvider.localizedStrings['save'] ?? "Save")),
-              ),
-              const SizedBox(height: 10),
-              ListTile(
-                leading: const Icon(Icons.settings),
-                title: Text(languageProvider.localizedStrings['settings'] ?? "Settings"),
-                onTap: () {_showSettingsDialog(languageProvider);},
-              ),
-              ListTile(
-                leading: const Icon(Icons.lock),
-                title: Text(languageProvider.localizedStrings['changePassword'] ?? "Change Password"),
-                onTap: () {_showChangePasswordDialog(languageProvider);},
-              ),
-            ],
+            ),
           ),
-        ),
-      ),
+          if (isLoading)
+            Container(
+              color: Colors.black.withOpacity(0.3),
+              child: const Center(
+                child: CircularProgressIndicator(),
+              ),
+            ),
+        ],
+      )
+      
     );
   }
 }

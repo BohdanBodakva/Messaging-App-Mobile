@@ -42,7 +42,10 @@ class ChatPageState extends State<ChatPage> {
     isGroup = widget.chat.isGroup!;
     otherUsers = widget.chat.users!.where((user) => user.id != widget.currentUser!.id).toList();
     chatName = widget.chat.isGroup == true ? widget.chat.name! : otherUsers![0].name!;
+    
     _loadChatHistory();
+
+    
   }
 
   _loadChatHistory(){
@@ -56,7 +59,7 @@ class ChatPageState extends State<ChatPage> {
       final history = (data["chat_history"] as List).map((msg) => Message.fromJson(msg)).toList();
       final isEnd = data["is_end"].toString().toLowerCase() == "true";
 
-      print("KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK");
+      if (!mounted) return;
 
       setState(() {
         chatHistory = [...chatHistory, ...history];
@@ -67,6 +70,10 @@ class ChatPageState extends State<ChatPage> {
           isLoading = false;
           loadHistoryOffset += itemsCount;
         });
+
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+        });
       }
 
       if (isEnd) {
@@ -75,8 +82,6 @@ class ChatPageState extends State<ChatPage> {
         });
       }
     });
-
-    socket.off("send_message");
 
     socket.on('send_message', (data) {
       final message = Message.fromJson(data['message']);
@@ -99,10 +104,23 @@ class ChatPageState extends State<ChatPage> {
         setState(() {
           chatHistory = [...chatHistory, message];
         });
+
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+        });
       } else {
         // MAKE NOTIFICATION
       }
       
+    });
+
+    socket.on('delete_message', (data) {
+      final messageId = data['message_id'];
+
+      setState(() {
+        chatHistory = List.from(chatHistory.where((m) => m.id != messageId));
+        _selectedDeleteIndex = null;
+      });
     });
 
     socket.emit("load_chat_history", {
@@ -110,6 +128,8 @@ class ChatPageState extends State<ChatPage> {
       "items_count": itemsCount,
       "offset": loadHistoryOffset
     });
+
+    
   }
 
 
@@ -156,10 +176,9 @@ class ChatPageState extends State<ChatPage> {
   }
 
   void _deleteMessage(int index) {
-    setState(() {
-      // widget.messages.removeAt(index);
-      // isMyMessage.removeAt(index);
-      _selectedDeleteIndex = null;
+    socket.emit("delete_message", {
+      "message_id": index,
+      "room": widget.chat.id
     });
   }
 
@@ -167,6 +186,9 @@ class ChatPageState extends State<ChatPage> {
   void dispose() {
     socket.off("load_chat_history");
     socket.off("send_message");
+    socket.off("delete_message");
+
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -211,7 +233,9 @@ class ChatPageState extends State<ChatPage> {
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () {
-            // socket.off("send_message");
+            socket.off("send_message");
+            socket.off("load_chat_history");
+
             Navigator.pop(context, true);
           },
         ),
@@ -272,12 +296,12 @@ class ChatPageState extends State<ChatPage> {
                         currentUser: widget.currentUser,
                         chat: widget.chat,
                         isGroup: widget.chat.isGroup!,
-                        isSelectedForDeletion: _selectedDeleteIndex == index,
-                        onDelete: () => _deleteMessage(index),
+                        isSelectedForDeletion: _selectedDeleteIndex == chatHistory[index].id!,
+                        onDelete: () => _deleteMessage(chatHistory[index].id!),
                         onLongPress: () {
                           if (chatHistory[index].userId! == widget.currentUser!.id) {
                             setState(() {
-                              _selectedDeleteIndex = index;
+                              _selectedDeleteIndex = chatHistory[index].id!;
                             });
                           }
                         },

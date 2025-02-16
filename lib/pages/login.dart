@@ -7,7 +7,6 @@ import 'package:messaging_app/providers/language_provider.dart';
 import 'package:messaging_app/widgets/error_message.dart';
 import 'package:provider/provider.dart';
 import 'dart:convert';
-import 'package:http/http.dart' as http;
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key, User? currentUser, setCurrentUser});
@@ -61,6 +60,36 @@ class LoginPageState extends State<LoginPage> {
   @override
   void initState() {
     super.initState();
+
+    setState(() {
+      isLoading = true;
+    });
+
+    (() async {
+      final token = await getDataFromStorage("accessToken");
+      if (token != null) {
+        Navigator.push(
+          context,
+          PageRouteBuilder(
+            pageBuilder: (context, animation, secondaryAnimation) => const ChatListPage(),
+            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              const begin = Offset(1.0, 0.0);
+              const end = Offset.zero;
+              const curve = Curves.easeInOut;
+
+              var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+              var offsetAnimation = animation.drive(tween);
+
+              return SlideTransition(position: offsetAnimation, child: child);
+            },
+          ),
+        );
+      }
+    })();
+
+    setState(() {
+      isLoading = false;
+    });
   }
 
   void toggleForm() {
