@@ -25,6 +25,8 @@ class ChatListPageState extends State<ChatListPage> {
   User? currentUser;
   int? selectedChatId;
 
+  List<User> foundUsers = [];
+
   void setCurrentUser(User? user) {
     setState(() {
       currentUser = user;
@@ -138,27 +140,90 @@ class ChatListPageState extends State<ChatListPage> {
 
       if (lastChatMessage != null) {
         lastChatMessage = Message.fromJson(lastChatMessage);
-
         chat!.messages = [lastChatMessage];
+      } else {
+        chat!.messages = [];
+      }
 
-        User newUser = currentUser!;
-        newUser.chats![newUser.chats!.indexOf(chat)] = chat;
+      User newUser = currentUser!;
+      newUser.chats![newUser.chats!.indexOf(chat)] = chat;
 
-        currentUser!.chats!.sort((a, b) {
-          DateTime? aLatest = a.messages.isNotEmpty ? a.messages.last.sendAt : null;
-          DateTime? bLatest = b.messages.isNotEmpty ? b.messages.last.sendAt : null;
+      currentUser!.chats!.sort((a, b) {
+        DateTime aLatest = a.messages.isNotEmpty ? a.messages.last.sendAt : a.createdAt;
+        DateTime bLatest = b.messages.isNotEmpty ? b.messages.last.sendAt : b.createdAt;
 
-          if (aLatest == null && bLatest == null) return 0;
-          if (aLatest == null) return 1;
-          if (bLatest == null) return -1;
+        return bLatest.compareTo(aLatest);
+      });
 
-          return bLatest.compareTo(aLatest);
-        });
+      setState(() {
+        currentUser = newUser;
+      });
 
-        setState(() {
-          currentUser = newUser;
+    });
+
+    socket.on("search_users_by_username", (data) {
+      List<User> searchedUsers = (data["users"] as List).map((u) => User.fromJson(u)).toList();
+
+      setState(() {
+        foundUsers = searchedUsers;
+      });
+    });
+
+    socket.on("load_user_chats", (data) {
+      List<Chat> userChats = (data["user_chats"] as List).map((c) => Chat.fromJson(c)).toList();
+
+      print("YYYYYYYYYYYYYYYYYYYYYYYYY: $userChats");
+
+      User user = currentUser!;
+      user.chats = userChats;
+
+      setCurrentUser(user);
+    });
+
+    socket.on("change_user_info_for_chat_list", (data) {
+      final changedUserId = data["changed_user_id"];
+
+      if (changedUserId != currentUser!.id) {
+        socket.emit("load_user_chats", {
+          "user_id": currentUser!.id
         });
       }
+    });
+
+    socket.on("create_chat", (data) {
+      final currentUserId = data["current_user_id"];
+      final chat = Chat.fromJson(data["chat"]);
+      final users = (data["users"] as List).map((u) => User.fromJson(u)).toList();
+
+      final userIds = users.map((u) => u.id).toList();
+
+      if (currentUserId == currentUser!.id) {
+        User user = currentUser!;
+        user.chats = [chat, ...user.chats!];
+
+        setCurrentUser(user);
+
+      } else if (!userIds.contains(currentUserId)) {
+        return;
+      }
+
+      Navigator.push(
+          context,
+          PageRouteBuilder(
+            pageBuilder: (context, animation, secondaryAnimation) => ChatPage(chat: chat, currentUser: currentUser,),
+            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              const begin = Offset(1.0, 0.0);
+              const end = Offset.zero;
+              const curve = Curves.easeInOut;
+
+              var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+              var offsetAnimation = animation.drive(tween);
+
+              return SlideTransition(position: offsetAnimation, child: child);
+            },
+          )
+        );
+
     });
 
     socket.connect();
@@ -181,6 +246,32 @@ class ChatListPageState extends State<ChatListPage> {
     socket.emit("go_offline", {"user_id": userId});
     socket.disconnect();
     super.dispose();
+  }
+
+  void searchUsers(String value) {
+    if (value.isEmpty) {
+      setState(() {
+        foundUsers = [];
+      });
+    } else {
+      socket.emit("search_users_by_username", {
+        "username_value": value
+      });
+    }
+  }
+
+  void startNewChat(int userId) {
+    setState(() {
+      foundUsers = [];
+    });
+    _searchController.clear();
+
+    socket.emit("create_chat", {
+      "current_user_id": currentUser!.id,
+      "user_ids": [userId],
+      "is_group": false,
+      "created_at": DateTime.now().toIso8601String()
+    });
   }
 
   @override
@@ -290,6 +381,7 @@ class ChatListPageState extends State<ChatListPage> {
                         ),
                         child: TextField(
                           controller: _searchController,
+                          onChanged: (value) {searchUsers(value);},
                           decoration: InputDecoration(
                             prefixIcon: const Icon(Icons.search, color: Colors.grey),
                             hintText: languageProvider.localizedStrings['searchUsers'] ?? "Search users",
@@ -299,6 +391,9 @@ class ChatListPageState extends State<ChatListPage> {
                             suffixIcon: IconButton(
                               icon: const Icon(Icons.clear, color: Colors.grey),
                               onPressed: () {
+                                setState(() {
+                                  foundUsers = [];
+                                });
                                 _searchController.clear();
                               },
                             ),
@@ -307,6 +402,54 @@ class ChatListPageState extends State<ChatListPage> {
                       ),
                     ),
                   ),
+                  if (foundUsers.isNotEmpty)
+                    Center(
+                      child: Container(
+                        width: MediaQuery.of(context).size.width * 0.75,
+                        height: 80,
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(8),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.1),
+                              blurRadius: 4,
+                              spreadRadius: 2,
+                            ),
+                          ],
+                        ),
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: foundUsers.map((user) {
+                              return GestureDetector(
+                                onTap: () {startNewChat(user.id!);},
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 5),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      CircleAvatar(
+                                        radius: 25,
+                                        backgroundImage: AssetImage(user.profilePhotoLink ?? "assets/letter_images/u.png"),
+                                      ),
+                                      const SizedBox(height: 5),
+                                      Text(
+                                        user.username!,
+                                        style: const TextStyle(fontSize: 12),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                      ),
+                    ),
                   const SizedBox(height: 10),
                   Expanded(
                     child: ListView.builder(

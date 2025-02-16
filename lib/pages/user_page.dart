@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:messaging_app/handlers/shared_prefs.dart';
 import 'package:messaging_app/handlers/websocket.dart';
+import 'package:messaging_app/models/chat.dart';
 import 'package:messaging_app/models/user.dart';
 import 'package:messaging_app/pages/login.dart';
 import 'package:messaging_app/providers/language_provider.dart';
@@ -65,26 +66,20 @@ class UserProfilePageState extends State<UserProfilePage> {
 
   Future<void> _defineSocketEvents() async {
     socket.on("change_user_info", (data) {
+
       final newUser = User.fromJson(data["user"], includeChats: false);
 
-      if (widget.currentUser!.id == newUser.id) {
-        User user = profileUser!;
+      User user = profileUser!;
 
-        user.name = newUser.name;
-        user.surname = newUser.surname;
-        user.username = newUser.username;
-        user.profilePhotoLink = newUser.profilePhotoLink;
+      user.name = newUser.name;
+      user.surname = newUser.surname;
+      user.username = newUser.username;
+      user.profilePhotoLink = newUser.profilePhotoLink;
 
-        widget.setCurrentUser(user);
-        setState(() {
-          profileUser = user;
-        });
-      } else {
-        
-      }
-      
-
-      // socket.emit(event)
+      widget.setCurrentUser(user);
+      setState(() {
+        profileUser = user;
+      });
     });
 
     socket.on("change_user_info_username_exists", (data) {
@@ -95,6 +90,8 @@ class UserProfilePageState extends State<UserProfilePage> {
         isUsernameInputValid = true;
       });
     });
+
+    
   }
 
   Future<void> _pickImage() async {
@@ -282,8 +279,6 @@ class UserProfilePageState extends State<UserProfilePage> {
     final name = _nameController.text;
     final surname = _surnameController.text;
     final username = _usernameController.text;
-
-    print("PPPPPPPPPPPPPPPPPPP: $name-$surname-$username");
 
     if (name.isEmpty) {
       setState(() {
