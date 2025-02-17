@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:messaging_app/handlers/date_time.dart';
+import 'package:messaging_app/handlers/messages.dart';
 import 'package:messaging_app/handlers/shared_prefs.dart';
 import 'package:messaging_app/handlers/websocket.dart';
 import 'package:messaging_app/models/chat.dart';
@@ -11,6 +12,7 @@ import 'package:messaging_app/pages/login.dart';
 import 'package:messaging_app/pages/user_page.dart';
 import 'package:messaging_app/providers/language_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_background/flutter_background.dart';
 
 class ChatListPage extends StatefulWidget  {
 
@@ -53,10 +55,68 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
   final TextEditingController _searchController = TextEditingController();
   bool _showSearchBar = true;
 
+  bool _backgroundServiceInitialized = false;
+
+  Future<void> initBackgroundService() async {
+    try {
+      const androidConfig = FlutterBackgroundAndroidConfig(
+        notificationTitle: "Socket.IO is running",
+        notificationText: "Background service is active",
+        notificationImportance: AndroidNotificationImportance.normal,
+        notificationIcon: AndroidResource(
+          name: 'background_icon',
+          defType: 'drawable',
+        ),
+      );
+
+      final success = await FlutterBackground.initialize(androidConfig: androidConfig);
+      
+      if (success) {
+        setState(() {
+          _backgroundServiceInitialized = true;
+        });
+        
+        // Only try to enable background execution after successful initialization
+        if (_backgroundServiceInitialized) {
+          final isEnabled = await FlutterBackground.enableBackgroundExecution();
+          if (isEnabled) {
+            debugPrint('Background execution enabled successfully');
+          } else {
+            debugPrint('Failed to enable background execution');
+          }
+        }
+      } else {
+        debugPrint('Failed to initialize background service');
+      }
+    } catch (e) {
+      debugPrint('Error initializing background service: $e');
+    }
+  }
+
+  Future<void> enableBackgroundMode() async {
+    if (!_backgroundServiceInitialized) {
+      debugPrint('Cannot enable background execution: service not initialized');
+      return;
+    }
+
+    try {
+      final isEnabled = await FlutterBackground.enableBackgroundExecution();
+      if (isEnabled) {
+        debugPrint('Background execution enabled successfully');
+      } else {
+        debugPrint('Failed to enable background execution');
+      }
+    } catch (e) {
+      debugPrint('Error enabling background execution: $e');
+    }
+  }
+
   @override
   void initState() {
     super.initState();
+
     WidgetsBinding.instance.addObserver(this);
+    initBackgroundService();
 
     _scrollController.addListener(() {
       if (_scrollController.offset <= 0) {
@@ -79,8 +139,6 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
   }
 
   Future<void> _connectToSocket() async {
-    socket.off("validate_token");
-    socket.off("load_user");
 
     socket.on('validate_token_error', (data) {
       socket.disconnect();
@@ -230,10 +288,6 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
 
         setCurrentUser(user);
 
-        // socket.emit("load_user_chats", {
-        //   "user_id": currentUser!.id
-        // });
-
         Navigator.push(
           context,
           PageRouteBuilder(
@@ -249,6 +303,11 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
               return SlideTransition(position: offsetAnimation, child: child);
             },
           )
+        );
+
+        showSuccessToast(
+          context, 
+          Provider.of<LanguageProvider>(context, listen: false).localizedStrings["chatCreatedSuccessfully"] ?? "Chat was created successfully"
         );
 
       } else if (userIds.contains(currentUser!.id)) {
@@ -279,21 +338,41 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
   }
 
   @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
-      _sendOfflineStatus();
+  void didChangeAppLifecycleState(AppLifecycleState state) async {
+    super.didChangeAppLifecycleState(state);
+    
+    switch (state) {
+      case AppLifecycleState.resumed:
+        debugPrint("App resumed, reconnecting socket...");
+        _connectSocket();
+        
+        if (_backgroundServiceInitialized) {
+          final enabled = await FlutterBackground.enableBackgroundExecution();
+          if (enabled) {
+            debugPrint('Background execution re-enabled');
+          }
+        }
+        break;
+        
+      case AppLifecycleState.paused:
+        debugPrint("App paused, managing background state...");
+        if (_backgroundServiceInitialized) {
+          final isEnabled = FlutterBackground.isBackgroundExecutionEnabled;
+          if (!isEnabled) {
+            await FlutterBackground.enableBackgroundExecution();
+          }
+          _disconnectSocket();
+        } else {
+          _disconnectSocket();
+        }
+        break;
+        
+      default:
+        break;
     }
   }
 
-  void _sendOfflineStatus() {
-    if (socket.connected) {
-      socket.emit("go_offline", {"user_id": currentUser!.id});
 
-      Future.delayed(const Duration(milliseconds: 300), () {
-        socket.disconnect();
-      });
-    }
-  }
 
   @override
   void dispose() {
@@ -354,6 +433,85 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
     }
   }
 
+  Future<void> _connectSocket() async {
+    try {
+      String? accessToken = await getDataFromStorage("accessToken");
+      
+      if (accessToken == null) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const LoginPage()),
+        );
+        return;
+      }
+
+      // Reset socket event listeners to prevent duplicates
+      socket.off("validate_token_error");
+      socket.off("validate_token");
+      socket.off("set_status");
+      socket.off("load_user");
+      socket.off("send_message_chat_list");
+      socket.off("delete_message_chat_list");
+      socket.off("search_users_by_username");
+      socket.off("load_user_chats");
+      socket.off("change_user_info_for_chat_list");
+      socket.off("create_chat");
+
+      // Reconnect if not connected
+      if (!socket.connected) {
+        socket.connect();
+      }
+
+      // Set up socket event listeners
+      await _connectToSocket();
+
+      // Emit token validation
+      
+
+      
+      
+
+      debugPrint('Socket connected and listeners set up');
+    } catch (e) {
+      debugPrint('Error connecting socket: $e');
+    }
+  }
+
+  Future<void> _disconnectSocket() async {
+  try {
+    if (currentUser != null) {
+      // Notify server that user is going offline
+      socket.emit('go_offline', {'user_id': currentUser!.id});
+      
+      // Leave all chat rooms
+      for (Chat chat in currentUser!.chats!) {
+        socket.emit('leave_room', {'room': chat.id});
+      }
+    }
+
+    // Remove all event listeners
+    socket.off("validate_token_error");
+    socket.off("validate_token");
+    socket.off("set_status");
+    socket.off("load_user");
+    socket.off("send_message_chat_list");
+    socket.off("delete_message_chat_list");
+    socket.off("search_users_by_username");
+    socket.off("load_user_chats");
+    socket.off("change_user_info_for_chat_list");
+    socket.off("create_chat");
+
+    // Disconnect socket
+    if (socket.connected) {
+      socket.disconnect();
+    }
+
+    debugPrint('Socket disconnected and listeners removed');
+  } catch (e) {
+    debugPrint('Error disconnecting socket: $e');
+  }
+}
+
   @override
   Widget build(BuildContext context) {
     ModalRoute.of(context)?.addScopedWillPopCallback(() async {
@@ -402,7 +560,7 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
                 Navigator.push(
                   context,
                   PageRouteBuilder(
-                    pageBuilder: (context, animation, secondaryAnimation) => const NewGroupPage(),
+                    pageBuilder: (context, animation, secondaryAnimation) => NewGroupPage(currentUser: currentUser, setCurrentUser: setCurrentUser, isEditing: false, group: Chat(name: "", createdAt: DateTime.now(), isGroup: true)),
                     transitionsBuilder: (context, animation, secondaryAnimation, child) {
                       const begin = Offset(-1.0, 0.0);
                       const end = Offset.zero;
@@ -617,7 +775,15 @@ class ChatItem extends StatelessWidget {
           chat!.isGroup == true ? chat!.chatPhotoLink! : otherUsers[0].profilePhotoLink!
         ),
       ),
-      title: Text(chatName, style: const TextStyle(fontWeight: FontWeight.bold)),
+      title: Row(
+        children: [
+          if (chat!.isGroup!)
+            const Icon(Icons.group),
+          if (chat!.isGroup!)
+            const SizedBox(width: 7),
+          Text(chatName, style: const TextStyle(fontWeight: FontWeight.bold)),
+        ],
+      ),
       subtitle: chat!.isGroup == true ? Container() : Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

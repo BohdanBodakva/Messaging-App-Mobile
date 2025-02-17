@@ -43,5 +43,14 @@
     "incorrectPassword": "Неправильний пароль",
     "signupWasSuccessful": "Користувач зареєструваний успішно. Будь ласка, увійдіть",
     "userAlreadyExists": "Користувач з таким ім'ям вже існує",
-    "info": "Інфо"
+    "info": "Інфо",
+    "chatCreatedSuccessfully": "Чат успішно створено",
+    "groupCreatedSuccessfully": "Групу успішно створено",
+    "groupDeleted": "Групу видалено",
+    "leftFromGroup": "Ви покинули групу",
+    "userInfoChangedSuccessfully": "Успішно змінено інформацію",
+    "groupInfo": "Інформація про групу",
+    "deleteGroup": "Видалити групу",
+    "leaveGroup": "Покинути групу",
+    "groupUsers": "Користувачі"
 }

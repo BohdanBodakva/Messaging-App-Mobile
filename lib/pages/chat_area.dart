@@ -7,6 +7,7 @@ import 'package:messaging_app/models/chat.dart';
 import 'package:messaging_app/models/message.dart';
 import 'package:messaging_app/models/user.dart';
 import 'package:messaging_app/pages/chat_info_page.dart';
+import 'package:messaging_app/pages/group_page.dart';
 import 'package:messaging_app/providers/language_provider.dart';
 import 'package:provider/provider.dart';
 
@@ -43,6 +44,8 @@ class ChatPageState extends State<ChatPage> {
   @override
   void initState() {
     super.initState();
+
+    print("oooooooooooooooooooooooooooooooo: ${widget.chat.adminId}");
 
     setState(() {
       currentUserChatPage = widget.currentUser!.deepCopy();
@@ -89,6 +92,33 @@ class ChatPageState extends State<ChatPage> {
           isChatHistoryEnded = true;
         });
       }
+    });
+
+    socket.on("leave_group_from_chats", (data) {
+      final userId = data["user_id"];
+      final chatId = data["chat_id"];
+
+      if (userId == widget.currentUser!.id && widget.currentUser!.chats!.map((c) => c.id).toList().contains(chatId)) {
+        socket.emit("leave_room", {"room": chatId});
+
+        socket.emit("load_user_chats", {
+          "user_id": widget.currentUser!.id
+        });
+      }
+
+    });
+
+    socket.on("delete_chat_from_chats", (data) {
+      final chatId = data["chat_id"];
+
+      if (widget.currentUser!.chats!.map((c) => c.id).toList().contains(chatId)) {
+        socket.emit("leave_room", {"room": chatId});
+
+        socket.emit("load_user_chats", {
+          "user_id": widget.currentUser!.id
+        });
+      }
+
     });
 
     socket.on('send_message', (data) {
@@ -216,9 +246,14 @@ class ChatPageState extends State<ChatPage> {
                 Navigator.push(
                   context,
                   PageRouteBuilder(
-                    pageBuilder: (context, animation, secondaryAnimation) => ChatInfoPage(
-                      isGroup: isGroup, users: otherUsers, chat: currentChat!,
-                    ),
+                    pageBuilder: (context, animation, secondaryAnimation) => 
+                      isGroup ? 
+                      NewGroupPage(
+                        currentUser: widget.currentUser, setCurrentUser: widget.setCurrentUser, isEditing: true, group: widget.chat
+                      ) :
+                      ChatInfoPage(
+                        isGroup: isGroup, users: otherUsers, chat: currentChat!,
+                      ),
                     transitionsBuilder: (context, animation, secondaryAnimation, child) {
                       const begin = Offset(1.0, 0.0);
                       const end = Offset.zero;
@@ -232,9 +267,17 @@ class ChatPageState extends State<ChatPage> {
                   )
                 );
               },
-              child: Text(
-                isGroup ? chatName : "${otherUsers![0].name} ${otherUsers![0].surname}", 
-                style: const TextStyle(fontSize: 18)
+              child: Row(
+                children: [
+                  if (widget.chat.isGroup!)
+                    const Icon(Icons.group),
+                  if (widget.chat.isGroup!)
+                    const SizedBox(width: 7),
+                  Text(
+                    isGroup ? chatName : "${otherUsers![0].name} ${otherUsers![0].surname}", 
+                    style: const TextStyle(fontSize: 18)
+                  ),
+                ],
               ),
             )
           ],
@@ -254,9 +297,14 @@ class ChatPageState extends State<ChatPage> {
               Navigator.push(
                 context,
                 PageRouteBuilder(
-                  pageBuilder: (context, animation, secondaryAnimation) => ChatInfoPage(
-                    isGroup: isGroup, users: otherUsers, chat: currentChat!,
-                  ),
+                  pageBuilder: (context, animation, secondaryAnimation) => 
+                    isGroup ? 
+                    NewGroupPage(
+                      currentUser: widget.currentUser, setCurrentUser: widget.setCurrentUser, isEditing: true, group: widget.chat
+                    ) :
+                    ChatInfoPage(
+                      isGroup: isGroup, users: otherUsers, chat: currentChat!,
+                    ),
                   transitionsBuilder: (context, animation, secondaryAnimation, child) {
                     const begin = Offset(1.0, 0.0);
                     const end = Offset.zero;

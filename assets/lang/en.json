@@ -43,5 +43,14 @@
     "incorrectPassword": "Incorrect password",
     "signupWasSuccessful": "Sign up is successful. Please, log in",
     "userAlreadyExists": "User with such username already exists",
-    "info": "Info"
+    "info": "Info",
+    "chatCreatedSuccessfully": "Chat was created successfully",
+    "groupCreatedSuccessfully": "Group was created successfully",
+    "groupDeleted": "Group was deleted",
+    "leftFromGroup": "You have left from group",
+    "userInfoChangedSuccessfully": "User info was changed successfully",
+    "groupInfo": "Group Info",
+    "deleteGroup": "Delete group",
+    "leaveGroup": "Leave group",
+    "groupUsers": "Users"
 }

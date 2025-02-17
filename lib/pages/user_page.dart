@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
+import 'package:messaging_app/handlers/messages.dart';
 import 'package:messaging_app/handlers/shared_prefs.dart';
 import 'package:messaging_app/handlers/websocket.dart';
-import 'package:messaging_app/models/chat.dart';
 import 'package:messaging_app/models/user.dart';
 import 'package:messaging_app/pages/login.dart';
 import 'package:messaging_app/providers/language_provider.dart';
@@ -50,14 +50,6 @@ class UserProfilePageState extends State<UserProfilePage> {
     _setupSocketEvents();
   }
 
-  // @override
-  // void didUpdateWidget(covariant UserProfilePage oldWidget) {
-  //   super.didUpdateWidget(oldWidget);
-  //   setState(() {
-  //     profileUser = widget.currentUser!;
-  //   });
-  // }
-
   void _setupSocketEvents() {
     (() async {
       await _defineSocketEvents();
@@ -80,6 +72,11 @@ class UserProfilePageState extends State<UserProfilePage> {
       setState(() {
         profileUser = user;
       });
+
+      showSuccessToast(
+        context, 
+        Provider.of<LanguageProvider>(context, listen: false).localizedStrings["userInfoChangedSuccessfully"] ?? "User info was changed successfully"
+      );
     });
 
     socket.on("change_user_info_username_exists", (data) {
@@ -279,6 +276,13 @@ class UserProfilePageState extends State<UserProfilePage> {
     final name = _nameController.text;
     final surname = _surnameController.text;
     final username = _usernameController.text;
+
+    if (name == profileUser!.name && surname == profileUser!.surname && username == profileUser!.username) {
+      setState(() {
+        isLoading = false;
+      });
+      return;
+    }
 
     if (name.isEmpty) {
       setState(() {
