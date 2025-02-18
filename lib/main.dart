@@ -4,6 +4,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:messaging_app/pages/login.dart';
 import 'package:messaging_app/providers/language_provider.dart';
+import 'package:messaging_app/providers/notification_provider.dart';
 import 'package:provider/provider.dart';
 
 void main() {
@@ -15,8 +16,14 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider<LanguageProvider>(
-      create: (_) => LanguageProvider(),
+    return 
+    //ChangeNotifierProvider<LanguageProvider>(
+      //create: (_) => LanguageProvider(),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider<LanguageProvider>(create: (_) => LanguageProvider()),
+        ChangeNotifierProvider<NotificationProvider>(create: (_) => NotificationProvider()),
+      ],
       child: Consumer<LanguageProvider>(
         builder: (context, languageProvider, _) {
           return MaterialApp(

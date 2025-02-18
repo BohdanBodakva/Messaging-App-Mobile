@@ -4,15 +4,18 @@ import 'package:messaging_app/handlers/messages.dart';
 import 'package:messaging_app/handlers/shared_prefs.dart';
 import 'package:messaging_app/handlers/websocket.dart';
 import 'package:messaging_app/models/chat.dart';
-import 'package:messaging_app/models/message.dart';
+import 'package:messaging_app/models/message.dart' as Msg;
 import 'package:messaging_app/models/user.dart';
 import 'package:messaging_app/pages/chat_area.dart';
 import 'package:messaging_app/pages/group_page.dart';
 import 'package:messaging_app/pages/login.dart';
 import 'package:messaging_app/pages/user_page.dart';
 import 'package:messaging_app/providers/language_provider.dart';
+import 'package:messaging_app/providers/notification_provider.dart';
+import 'package:messaging_app/services/notifications_service.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_background/flutter_background.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 class ChatListPage extends StatefulWidget  {
 
@@ -23,6 +26,8 @@ class ChatListPage extends StatefulWidget  {
 }
 
 class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver {
+  late FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin;
+
   int? userId;
   User? currentUser;
   int? selectedChatId;
@@ -76,7 +81,6 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
           _backgroundServiceInitialized = true;
         });
         
-        // Only try to enable background execution after successful initialization
         if (_backgroundServiceInitialized) {
           final isEnabled = await FlutterBackground.enableBackgroundExecution();
           if (isEnabled) {
@@ -111,9 +115,16 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
     }
   }
 
+  late NotificationService notificationService;
+
   @override
   void initState() {
     super.initState();
+
+    notificationService = NotificationService();
+    (() async {
+      await notificationService.requestNotificationPermission();
+    })();
 
     WidgetsBinding.instance.addObserver(this);
     initBackgroundService();
@@ -197,7 +208,9 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
     });
 
     socket.on("send_message_chat_list", (data) {
-      final message = Message.fromJson(data['message']);
+      final message = Msg.Message.fromJson(data['message']);
+      final chat = Chat.fromJson(data['chat']);
+      final userThatSend = User.fromJson(data['user_that_send']);
       final room = data['room'];
 
       User newUser = currentUser!;
@@ -212,6 +225,15 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
       });
 
       // MAKE NOTIFICATION
+      if (Provider.of<NotificationProvider>(context, listen: false).isNotificationsEnabled) {
+        (() async {
+          await notificationService.showNotification(
+            chat.isGroup == true ? chat.name! : "${userThatSend.name!} ${userThatSend.surname}",
+            chat.isGroup == true ? "${userThatSend.name!} ${userThatSend.surname}" : "",
+            message.text!
+          );
+        }) ();
+      }
       
     });
 
@@ -223,7 +245,7 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
       Chat? chat = currentUser!.chats!.where((c) => c.id == chatId).first;
 
       if (lastChatMessage != null) {
-        lastChatMessage = Message.fromJson(lastChatMessage);
+        lastChatMessage = Msg.Message.fromJson(lastChatMessage);
         chat!.messages = [lastChatMessage];
       } else {
         chat!.messages = [];
@@ -445,7 +467,6 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
         return;
       }
 
-      // Reset socket event listeners to prevent duplicates
       socket.off("validate_token_error");
       socket.off("validate_token");
       socket.off("set_status");
@@ -457,19 +478,11 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
       socket.off("change_user_info_for_chat_list");
       socket.off("create_chat");
 
-      // Reconnect if not connected
       if (!socket.connected) {
         socket.connect();
       }
 
-      // Set up socket event listeners
       await _connectToSocket();
-
-      // Emit token validation
-      
-
-      
-      
 
       debugPrint('Socket connected and listeners set up');
     } catch (e) {
@@ -480,16 +493,13 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
   Future<void> _disconnectSocket() async {
   try {
     if (currentUser != null) {
-      // Notify server that user is going offline
       socket.emit('go_offline', {'user_id': currentUser!.id});
       
-      // Leave all chat rooms
       for (Chat chat in currentUser!.chats!) {
         socket.emit('leave_room', {'room': chat.id});
       }
     }
 
-    // Remove all event listeners
     socket.off("validate_token_error");
     socket.off("validate_token");
     socket.off("set_status");
@@ -501,7 +511,6 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
     socket.off("change_user_info_for_chat_list");
     socket.off("create_chat");
 
-    // Disconnect socket
     if (socket.connected) {
       socket.disconnect();
     }
@@ -519,6 +528,7 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
     });
 
     var languageProvider = Provider.of<LanguageProvider>(context);
+    var notificationProvider = Provider.of<NotificationProvider>(context, listen: false);
 
     return Stack(
       children: [
@@ -529,7 +539,7 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 GestureDetector(
-                  onTap: () {
+                  onTap: () async {
                     Navigator.push(
                       context,
                       PageRouteBuilder(

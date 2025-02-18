@@ -7,6 +7,7 @@ import 'package:messaging_app/handlers/websocket.dart';
 import 'package:messaging_app/models/user.dart';
 import 'package:messaging_app/pages/login.dart';
 import 'package:messaging_app/providers/language_provider.dart';
+import 'package:messaging_app/providers/notification_provider.dart';
 import 'package:provider/provider.dart';
 
 class UserProfilePage extends StatefulWidget {
@@ -164,9 +165,20 @@ class UserProfilePageState extends State<UserProfilePage> {
     );
   }
 
+  
+
   void _showSettingsDialog(languageProvider) {
+
     bool _notifications = true;
 
+    void toggleNotifications(bool value) {
+      setState(() => _notifications = value); 
+
+      (() async {
+        await Provider.of<NotificationProvider>(context, listen: false).toggleNotificationStatus();
+      })();
+    }
+    
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -191,8 +203,13 @@ class UserProfilePageState extends State<UserProfilePage> {
                 const SizedBox(height: 10),
                 SwitchListTile(
                   title: Text(languageProvider.localizedStrings['notifications'] ?? "Notifications"),
-                  value: _notifications,
-                  onChanged: (value) => setState(() => _notifications = value),
+                  value: Provider.of<NotificationProvider>(context, listen: false).isNotificationsEnabled,
+                  onChanged: (value) => {
+                    setState(() => _notifications = value), 
+                    (() async {
+                      await Provider.of<NotificationProvider>(context, listen: false).toggleNotificationStatus();
+                    })()
+                  },
                 ),
               ],
             ),
