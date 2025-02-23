@@ -225,16 +225,19 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
       });
 
       // MAKE NOTIFICATION
-      if (Provider.of<NotificationProvider>(context, listen: false).isNotificationsEnabled) {
+      if (
+        userThatSend.id != currentUser!.id &&
+        Provider.of<NotificationProvider>(context, listen: false).isNotificationsEnabled
+      ) {
         (() async {
           await notificationService.showNotification(
-            chat.isGroup == true ? chat.name! : "${userThatSend.name!} ${userThatSend.surname}",
-            chat.isGroup == true ? "${userThatSend.name!} ${userThatSend.surname}" : "",
-            message.text!
+            chat.isGroup ?? false,
+            chat.name ?? "",
+            "${userThatSend.name!} ${userThatSend.surname}",
+            message.text ?? ""
           );
         }) ();
       }
-      
     });
 
     socket.on("delete_message_chat_list", (data) {
@@ -278,8 +281,6 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
     socket.on("load_user_chats", (data) {
       List<Chat> userChats = (data["user_chats"] as List).map((c) => Chat.fromJson(c)).toList();
 
-      print("YYYYYYYYYYYYYYYYYYYYYYYYY: $userChats");
-
       User user = currentUser!;
       user.chats = userChats;
 
@@ -296,7 +297,7 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
       }
     });
 
-    socket.on("create_chat", (data) {
+    void createChatGroupHandle(data) {
       final currentUserId = data["current_user_id"];
       final users = (data["users"] as List).map((u) => User.fromJson(u)).toList();
       final userIds = users.map((u) => u.id).toList();
@@ -334,16 +335,18 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
 
       } else if (userIds.contains(currentUser!.id)) {
         socket.emit("join_room", {"room": chat.id});
+
+        debugPrint("ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ-ZZZZZZZZZZZZZZZZZZZ");
         
         socket.emit("load_user_chats", {
           "user_id": currentUser!.id
         });
       }
+    }
 
-      
-
-    });
-
+    socket.on("create_chat", createChatGroupHandle);
+    socket.on("create_group_chat_list", createChatGroupHandle);
+    
     socket.connect();
 
     String? accessToken = await getDataFromStorage("accessToken");
@@ -365,6 +368,8 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
     
     switch (state) {
       case AppLifecycleState.resumed:
+        socket.emit("go_online", {"user_id": currentUser!.id});
+
         debugPrint("App resumed, reconnecting socket...");
         _connectSocket();
         
@@ -377,6 +382,8 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
         break;
         
       case AppLifecycleState.paused:
+        socket.emit("go_offline", {"user_id": currentUser!.id});
+
         debugPrint("App paused, managing background state...");
         if (_backgroundServiceInitialized) {
           final isEnabled = FlutterBackground.isBackgroundExecutionEnabled;
@@ -412,6 +419,33 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
       socket.emit("search_users_by_username", {
         "username_value": value
       });
+    }
+  }
+
+  void openGroupChat(int chatId) {
+    final userChatsIds = currentUser!.chats!.map((c) => c.id).toList();
+    if (userChatsIds.contains(chatId)) {
+      Chat? chatWithUser = currentUser!.chats!.firstWhere(
+        (c) => c.id == chatId,
+        orElse: () => null
+      );
+
+      Navigator.push(
+        context,
+        PageRouteBuilder(
+          pageBuilder: (context, animation, secondaryAnimation) => ChatPage(chat: chatWithUser!, currentUser: currentUser, setCurrentUser: setCurrentUser),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            const begin = Offset(1.0, 0.0);
+            const end = Offset.zero;
+            const curve = Curves.easeInOut;
+
+            var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+            var offsetAnimation = animation.drive(tween);
+
+            return SlideTransition(position: offsetAnimation, child: child);
+          },
+        )
+      );
     }
   }
 
@@ -477,6 +511,7 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
       socket.off("load_user_chats");
       socket.off("change_user_info_for_chat_list");
       socket.off("create_chat");
+      socket.off("create_group_chat_list");
 
       if (!socket.connected) {
         socket.connect();
@@ -510,6 +545,7 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
     socket.off("load_user_chats");
     socket.off("change_user_info_for_chat_list");
     socket.off("create_chat");
+    socket.off("create_group_chat_list");
 
     if (socket.connected) {
       socket.disconnect();
@@ -570,7 +606,12 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
                 Navigator.push(
                   context,
                   PageRouteBuilder(
-                    pageBuilder: (context, animation, secondaryAnimation) => NewGroupPage(currentUser: currentUser, setCurrentUser: setCurrentUser, isEditing: false, group: Chat(name: "", createdAt: DateTime.now(), isGroup: true)),
+                    pageBuilder: (context, animation, secondaryAnimation) => NewGroupPage(
+                                                                              currentUser: currentUser, 
+                                                                              setCurrentUser: setCurrentUser, 
+                                                                              isEditing: false, 
+                                                                              group: Chat(name: "", createdAt: DateTime.now(), isGroup: true), 
+                                                                              openGroupChat: openGroupChat),
                     transitionsBuilder: (context, animation, secondaryAnimation, child) {
                       const begin = Offset(-1.0, 0.0);
                       const end = Offset.zero;

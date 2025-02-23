@@ -249,7 +249,7 @@ class ChatPageState extends State<ChatPage> {
                     pageBuilder: (context, animation, secondaryAnimation) => 
                       isGroup ? 
                       NewGroupPage(
-                        currentUser: widget.currentUser, setCurrentUser: widget.setCurrentUser, isEditing: true, group: widget.chat
+                        currentUser: widget.currentUser, setCurrentUser: widget.setCurrentUser, isEditing: true, group: widget.chat, openGroupChat: (){},
                       ) :
                       ChatInfoPage(
                         isGroup: isGroup, users: otherUsers, chat: currentChat!,
@@ -300,7 +300,7 @@ class ChatPageState extends State<ChatPage> {
                   pageBuilder: (context, animation, secondaryAnimation) => 
                     isGroup ? 
                     NewGroupPage(
-                      currentUser: widget.currentUser, setCurrentUser: widget.setCurrentUser, isEditing: true, group: widget.chat
+                      currentUser: widget.currentUser, setCurrentUser: widget.setCurrentUser, isEditing: true, group: widget.chat, openGroupChat: (){},
                     ) :
                     ChatInfoPage(
                       isGroup: isGroup, users: otherUsers, chat: currentChat!,

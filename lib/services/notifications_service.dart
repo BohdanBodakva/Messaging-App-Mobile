@@ -32,7 +32,7 @@ class NotificationService {
     }
   }
 
-  Future<void> showNotification(String chatName, String userName, String text) async {
+  Future<void> showNotification(bool isGroup, String chatName, String userName, String text) async {
     const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
       'channel_id', 'Channel Name',
       importance: Importance.high,
@@ -42,11 +42,21 @@ class NotificationService {
 
     const NotificationDetails details = NotificationDetails(android: androidDetails);
 
-    await flutterLocalNotificationsPlugin.show(
-      0,
-      chatName,
-      "$userName: $text",
-      details,
-    );
+    if (isGroup) {
+      await flutterLocalNotificationsPlugin.show(
+        0,
+        chatName,
+        "$userName: $text",
+        details,
+      );
+    } else {
+      await flutterLocalNotificationsPlugin.show(
+        0,
+        userName,
+        text,
+        details,
+      );
+    }
+    
   }
 }

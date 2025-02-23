@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
-import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:messaging_app/handlers/messages.dart';
 import 'package:messaging_app/handlers/websocket.dart';
 import 'package:messaging_app/models/chat.dart';
 import 'package:messaging_app/models/user.dart';
-import 'package:messaging_app/pages/chat_area.dart';
 import 'package:messaging_app/pages/chat_list.dart';
 import 'package:messaging_app/providers/language_provider.dart';
 import 'package:provider/provider.dart';
@@ -15,8 +13,9 @@ class NewGroupPage extends StatefulWidget {
   final Function setCurrentUser;
   final bool isEditing;
   final Chat group;
+  final Function openGroupChat;
 
-  const NewGroupPage({super.key, required this.currentUser, required this.setCurrentUser, required this.isEditing, required this.group});
+  const NewGroupPage({super.key, required this.currentUser, required this.setCurrentUser, required this.isEditing, required this.group, required this.openGroupChat});
 
   @override
   NewGroupPageState createState() => NewGroupPageState();
@@ -53,8 +52,12 @@ class NewGroupPageState extends State<NewGroupPage> {
       });
     }
 
+    if (!isAdmin && !widget.isEditing) {
+      _selectedUsers = [widget.currentUser!.deepCopy()];
+    }
+
     socket.on("search_users_for_group", (data) {
-      if (isAdmin == true) {
+      if ((isAdmin && widget.isEditing) || (!isAdmin && !widget.isEditing)) {
         List<User> searchedUsers = (data["users"] as List).map((u) => User.fromJson(u)).toList();
       
         List<User> filteredList = searchedUsers.where(
@@ -66,6 +69,22 @@ class NewGroupPageState extends State<NewGroupPage> {
           _foundUsers = filteredList;
         });
       }
+      
+    });
+
+    socket.on("change_group_info", (data) {
+      // if ((isAdmin && widget.isEditing) || (!isAdmin && !widget.isEditing)) {
+      //   List<User> searchedUsers = (data["users"] as List).map((u) => User.fromJson(u)).toList();
+      
+      //   List<User> filteredList = searchedUsers.where(
+      //     (u) => u.id != widget.currentUser!.id && 
+      //     !_selectedUsers.map((u1) => u1.id
+      //   ).toList().contains(u.id)).toList();
+
+      //   setState(() {
+      //     _foundUsers = filteredList;
+      //   });
+      // }
       
     });
 
@@ -154,24 +173,30 @@ class NewGroupPageState extends State<NewGroupPage> {
 
         widget.setCurrentUser(user);
 
+        socket.emit("load_user_chats", {
+          "user_id": widget.currentUser!.id
+        });
+
         Navigator.pop(context);
 
-        Navigator.push(
-          context,
-          PageRouteBuilder(
-            pageBuilder: (context, animation, secondaryAnimation) => ChatPage(chat: chat, currentUser: widget.currentUser, setCurrentUser: widget.setCurrentUser),
-            transitionsBuilder: (context, animation, secondaryAnimation, child) {
-              const begin = Offset(1.0, 0.0);
-              const end = Offset.zero;
-              const curve = Curves.easeInOut;
+        // Navigator.push(
+        //   context,
+        //   PageRouteBuilder(
+        //     pageBuilder: (context, animation, secondaryAnimation) => ChatPage(chat: chat, currentUser: widget.currentUser, setCurrentUser: widget.setCurrentUser),
+        //     transitionsBuilder: (context, animation, secondaryAnimation, child) {
+        //       const begin = Offset(1.0, 0.0);
+        //       const end = Offset.zero;
+        //       const curve = Curves.easeInOut;
 
-              var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
-              var offsetAnimation = animation.drive(tween);
+        //       var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+        //       var offsetAnimation = animation.drive(tween);
 
-              return SlideTransition(position: offsetAnimation, child: child);
-            },
-          )
-        );
+        //       return SlideTransition(position: offsetAnimation, child: child);
+        //     },
+        //   )
+        // );
+
+        widget.openGroupChat(chat.id);
 
         showSuccessToast(
           context, 
@@ -311,7 +336,7 @@ class NewGroupPageState extends State<NewGroupPage> {
                 ),
               ),
               const SizedBox(height: 10),
-              _buildTextField(isAdmin, _groupNameController, languageProvider.localizedStrings['groupName'] ?? "Group Name"),
+              _buildTextField(isAdmin, widget.isEditing, _groupNameController, languageProvider.localizedStrings['groupName'] ?? "Group Name"),
               Visibility(
                 visible: !isGroupNameValid,
                 child: Padding(
@@ -323,7 +348,9 @@ class NewGroupPageState extends State<NewGroupPage> {
                 ),
               ),
               const SizedBox(height: 20),
-              if (widget.isEditing && isAdmin)
+              if ((widget.isEditing && isAdmin) || 
+                  (!widget.isEditing && !isAdmin)
+                 )
                 TextField(
                   controller: _searchController,
                   onChanged: (value) {searchUsers(value);},
@@ -400,14 +427,14 @@ class NewGroupPageState extends State<NewGroupPage> {
                     ),
                   ),
                 ),
-              _buildSelectedUsers(isAdmin),
+              _buildSelectedUsers(isAdmin, widget.isEditing),
               const SizedBox(height: 20),
               if (widget.isEditing && isAdmin)
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: _deleteGroup,
-                    child: Text(languageProvider.localizedStrings['deleteGroup'] ?? "Delete Group"),
+                    onPressed: _saveGroupChanges,
+                    child: Text(languageProvider.localizedStrings['save'] ?? "Save"),
                   ),
                 ),
               if (widget.isEditing)
@@ -422,8 +449,8 @@ class NewGroupPageState extends State<NewGroupPage> {
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: _saveGroupChanges,
-                    child: Text(languageProvider.localizedStrings['createGroup'] ?? "Create Group"),
+                    onPressed: _deleteGroup,
+                    child: Text(languageProvider.localizedStrings['deleteGroup'] ?? "Delete Group"),
                   ),
                 ),
               if (!widget.isEditing)
@@ -441,12 +468,12 @@ class NewGroupPageState extends State<NewGroupPage> {
     );
   }
 
-  Widget _buildTextField(bool isAdmin, TextEditingController controller, String label) {
+  Widget _buildTextField(bool isAdmin, bool isEditing, TextEditingController controller, String label) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: TextField(
         controller: controller,
-        readOnly: !isAdmin,
+        readOnly: !((isAdmin && isEditing) ||(!isAdmin && !isEditing)),
         decoration: InputDecoration(
           labelText: label,
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
@@ -456,17 +483,19 @@ class NewGroupPageState extends State<NewGroupPage> {
     );
   }
 
-  Widget _buildSelectedUsers(bool isAdmin) {
+  Widget _buildSelectedUsers(bool isAdmin, bool isEditing) {
     return Wrap(
       spacing: 8.0,
       children: _selectedUsers.map((user) {
+        final isCurrentUser = widget.currentUser!.id == user.id;
+
         return Chip(
           avatar: CircleAvatar(
             backgroundImage: AssetImage(user.profilePhotoLink!),
           ),
           label: Text(user.username!),
-          deleteIcon: isAdmin ? const Icon(Icons.close, size: 16) : null,
-          onDeleted: isAdmin ? () => _unselectUser(user) : null,
+          deleteIcon: !isCurrentUser && ((isAdmin && isEditing) ||(!isAdmin && !isEditing)) ? const Icon(Icons.close, size: 16) : null,
+          onDeleted: !isCurrentUser && ((isAdmin && isEditing) ||(!isAdmin && !isEditing)) ? () => _unselectUser(user) : null,
         );
       }).toList(),
     );

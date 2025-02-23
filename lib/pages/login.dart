@@ -7,6 +7,7 @@ import 'package:messaging_app/providers/language_provider.dart';
 import 'package:messaging_app/widgets/error_message.dart';
 import 'package:provider/provider.dart';
 import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key, User? currentUser, setCurrentUser});
@@ -60,6 +61,10 @@ class LoginPageState extends State<LoginPage> {
   @override
   void initState() {
     super.initState();
+
+    // (() async {
+    //   await (await SharedPreferences.getInstance()).clear();
+    // })();
 
     setState(() {
       isLoading = true;
