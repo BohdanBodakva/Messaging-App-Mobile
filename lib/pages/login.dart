@@ -73,8 +73,7 @@ class LoginPageState extends State<LoginPage> {
     (() async {
       final token = await getDataFromStorage("accessToken");
       if (token != null) {
-        Navigator.push(
-          context,
+        Navigator.of(context, rootNavigator: true).push(
           PageRouteBuilder(
             pageBuilder: (context, animation, secondaryAnimation) => const ChatListPage(),
             transitionsBuilder: (context, animation, secondaryAnimation, child) {
@@ -344,8 +343,7 @@ class LoginForm extends StatelessWidget {
             if (error == null) {
               await saveDataToStorage("accessToken", response[0]["access_token"]);
 
-              Navigator.push(
-                context,
+              Navigator.of(context, rootNavigator: true).push(
                 PageRouteBuilder(
                   pageBuilder: (context, animation, secondaryAnimation) => const ChatListPage(),
                   transitionsBuilder: (context, animation, secondaryAnimation, child) {

@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:messaging_app/handlers/messages.dart';
+import 'package:messaging_app/handlers/websocket.dart';
 import 'package:messaging_app/models/chat.dart';
 import 'package:messaging_app/models/user.dart';
+import 'package:messaging_app/pages/chat_list.dart';
 import 'package:messaging_app/providers/language_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:socket_io_client/socket_io_client.dart';
 
 class ChatInfoPage extends StatelessWidget {
   final bool isGroup;
@@ -22,7 +26,7 @@ class ChatInfoPage extends StatelessWidget {
         centerTitle: true,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () => Navigator.of(context, rootNavigator: true).pop(),
         ),
       ),
       body: Padding(
@@ -48,7 +52,11 @@ class ChatInfoPage extends StatelessWidget {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: () => _showDeleteChatDialog(context),
+                  onPressed: () async => {
+                    await _showDeleteChatDialog(context, socket), 
+                    Navigator.pop(context),
+                    Navigator.pop(context),
+                  },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.red,
                   ),
@@ -74,22 +82,26 @@ class ChatInfoPage extends StatelessWidget {
     );
   }
 
-  void _showDeleteChatDialog(BuildContext context) {
-    var languageProvider = Provider.of<LanguageProvider>(context);
+  Future<void> _showDeleteChatDialog(BuildContext context, Socket socket) async {
+    var languageProvider = Provider.of<LanguageProvider>(context, listen: false);
 
-    showDialog(
+    await showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: Text(languageProvider.localizedStrings['deleteChat'] ?? "Delete Chat"),
         content: Text(languageProvider.localizedStrings['deleteChatConfirmMessage'] ?? "Are you sure you want to delete this chat?"),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.of(context, rootNavigator: true).pop(),
             child: Text(languageProvider.localizedStrings['cancel'] ?? "Cancel"),
           ),
           ElevatedButton(
             onPressed: () {
-              Navigator.pop(context);
+              socket.emit("delete_chat", {
+                "chat_id": chat.id
+              });
+
+              Navigator.of(context, rootNavigator: true).pop();
             },
             child: Text(languageProvider.localizedStrings['delete'] ?? "Delete"),
           ),

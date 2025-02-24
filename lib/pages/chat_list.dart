@@ -154,8 +154,7 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
     socket.on('validate_token_error', (data) {
       socket.disconnect();
 
-      Navigator.push(
-        context,
+      Navigator.of(context, rootNavigator: true).push(
         PageRouteBuilder(
           pageBuilder: (context, animation, secondaryAnimation) => const LoginPage(),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
@@ -270,6 +269,19 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
 
     });
 
+    socket.on("delete_chat_from_chats", (data) {
+      final chatId = data["chat_id"];
+
+      if (currentUser!.chats!.map((c) => c.id).toList().contains(chatId)) {
+        socket.emit("leave_room", {"room": chatId});
+
+        socket.emit("load_user_chats", {
+          "user_id": currentUser!.id
+        });
+      }
+
+    });
+
     socket.on("search_users_by_username", (data) {
       List<User> searchedUsers = (data["users"] as List).map((u) => User.fromJson(u)).toList();
 
@@ -304,17 +316,27 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
       final chat = Chat.fromJson(data["chat"]);
 
       if (currentUserId == currentUser!.id) {
+        socket.emit("load_user_chats", {
+          "user_id": currentUser!.id
+        });
+
         socket.emit("join_room", {"room": chat.id});
 
         User user = currentUser!.deepCopy();
         user.chats = [chat, ...user.chats!];
 
-        setCurrentUser(user);
+        setState(() {
+          currentUser = user;
+        });
 
-        Navigator.push(
-          context,
+        Chat? chatWithUser = currentUser!.chats!.firstWhere(
+          (c) => c.id == chat.id,
+          orElse: () => null
+        );
+
+        Navigator.of(context, rootNavigator: true).push(
           PageRouteBuilder(
-            pageBuilder: (context, animation, secondaryAnimation) => ChatPage(chat: chat, currentUser: currentUser, setCurrentUser: setCurrentUser),
+            pageBuilder: (context, animation, secondaryAnimation) => ChatPage(chat: chatWithUser!, currentUser: currentUser, setCurrentUser: setCurrentUser),
             transitionsBuilder: (context, animation, secondaryAnimation, child) {
               const begin = Offset(1.0, 0.0);
               const end = Offset.zero;
@@ -328,6 +350,22 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
           )
         );
 
+        // Navigator.of(context, rootNavigator: true).push(
+        //   PageRouteBuilder(
+        //     pageBuilder: (context, animation, secondaryAnimation) => ChatPage(chat: chat, currentUser: currentUser, setCurrentUser: setCurrentUser),
+        //     transitionsBuilder: (context, animation, secondaryAnimation, child) {
+        //       const begin = Offset(1.0, 0.0);
+        //       const end = Offset.zero;
+        //       const curve = Curves.easeInOut;
+
+        //       var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+        //       var offsetAnimation = animation.drive(tween);
+
+        //       return SlideTransition(position: offsetAnimation, child: child);
+        //     },
+        //   )
+        // );
+
         showSuccessToast(
           context, 
           Provider.of<LanguageProvider>(context, listen: false).localizedStrings["chatCreatedSuccessfully"] ?? "Chat was created successfully"
@@ -335,8 +373,6 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
 
       } else if (userIds.contains(currentUser!.id)) {
         socket.emit("join_room", {"room": chat.id});
-
-        debugPrint("ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ-ZZZZZZZZZZZZZZZZZZZ");
         
         socket.emit("load_user_chats", {
           "user_id": currentUser!.id
@@ -354,8 +390,7 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
     if (accessToken != null) {
       socket.emit("validate_token", {"access_token": accessToken});
     } else {
-      Navigator.push(
-        context,
+      Navigator.of(context, rootNavigator: true).push(
         MaterialPageRoute(builder: (context) => const LoginPage()),
       );
     }
@@ -430,8 +465,7 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
         orElse: () => null
       );
 
-      Navigator.push(
-        context,
+      Navigator.of(context, rootNavigator: true).push(
         PageRouteBuilder(
           pageBuilder: (context, animation, secondaryAnimation) => ChatPage(chat: chatWithUser!, currentUser: currentUser, setCurrentUser: setCurrentUser),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
@@ -455,17 +489,16 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
     });
     _searchController.clear();
 
-    final userIdsList = currentUser!.chats!.expand((chat) => chat.users).map((user) => user.id!).toSet().toList();
+    final userIdsList = currentUser!.chats!.where((c) => c.isGroup == false).toList().expand((chat) => chat.users).map((user) => user.id!).toSet().toList();
     if (userIdsList.contains(userId)) {
-      Chat? chatWithUser = currentUser!.chats!.firstWhere(
-        (chat) => chat.users.length == 2 && chat.users.any((user) => user.id == userId),
-        orElse: () => null
-      );
+      
+      Chat chatWithUser = currentUser!.chats!.where(
+        (chat) => chat.isGroup == false && chat.users.map((u) => u.id).toList().contains(userId)
+      ).toList()[0] as Chat;
 
-      Navigator.push(
-        context,
+      Navigator.of(context, rootNavigator: true).push(
         PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) => ChatPage(chat: chatWithUser!, currentUser: currentUser, setCurrentUser: setCurrentUser),
+          pageBuilder: (context, animation, secondaryAnimation) => ChatPage(chat: chatWithUser, currentUser: currentUser, setCurrentUser: setCurrentUser),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             const begin = Offset(1.0, 0.0);
             const end = Offset.zero;
@@ -576,8 +609,7 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
               children: [
                 GestureDetector(
                   onTap: () async {
-                    Navigator.push(
-                      context,
+                    Navigator.of(context, rootNavigator: true).push(
                       PageRouteBuilder(
                         pageBuilder: (context, animation, secondaryAnimation) => UserProfilePage(currentUser: currentUser, setCurrentUser: setCurrentUser),
                         transitionsBuilder: (context, animation, secondaryAnimation, child) {
@@ -603,15 +635,14 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
             leading: IconButton(
               icon: const Icon(Icons.group_add),
               onPressed: () {
-                Navigator.push(
-                  context,
+                Navigator.of(context, rootNavigator: true).push(
                   PageRouteBuilder(
                     pageBuilder: (context, animation, secondaryAnimation) => NewGroupPage(
-                                                                              currentUser: currentUser, 
-                                                                              setCurrentUser: setCurrentUser, 
-                                                                              isEditing: false, 
-                                                                              group: Chat(name: "", createdAt: DateTime.now(), isGroup: true), 
-                                                                              openGroupChat: openGroupChat),
+                                                            currentUser: currentUser, 
+                                                            setCurrentUser: setCurrentUser, 
+                                                            isEditing: false, 
+                                                            group: Chat(name: "", createdAt: DateTime.now(), isGroup: true), 
+                                                            openGroupChat: openGroupChat),
                     transitionsBuilder: (context, animation, secondaryAnimation, child) {
                       const begin = Offset(-1.0, 0.0);
                       const end = Offset.zero;
@@ -630,8 +661,7 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
               IconButton(
                 icon: const Icon(Icons.settings),
                 onPressed: () {
-                  Navigator.push(
-                    context,
+                  Navigator.of(context, rootNavigator: true).push(
                     PageRouteBuilder(
                       pageBuilder: (context, animation, secondaryAnimation) => UserProfilePage(currentUser: currentUser, setCurrentUser: setCurrentUser),
                       transitionsBuilder: (context, animation, secondaryAnimation, child) {
@@ -754,8 +784,7 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
                               selectedChatId = chat.id;
                             });
 
-                            Navigator.push(
-                              context,
+                            Navigator.of(context, rootNavigator: true).push(
                               PageRouteBuilder(
                                 pageBuilder: (context, animation, secondaryAnimation) => ChatPage(chat: chat, currentUser: currentUser, setCurrentUser: setCurrentUser),
                                 transitionsBuilder: (context, animation, secondaryAnimation, child) {

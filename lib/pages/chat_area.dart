@@ -7,6 +7,7 @@ import 'package:messaging_app/models/chat.dart';
 import 'package:messaging_app/models/message.dart';
 import 'package:messaging_app/models/user.dart';
 import 'package:messaging_app/pages/chat_info_page.dart';
+import 'package:messaging_app/pages/chat_list.dart';
 import 'package:messaging_app/pages/group_page.dart';
 import 'package:messaging_app/providers/language_provider.dart';
 import 'package:provider/provider.dart';
@@ -45,7 +46,7 @@ class ChatPageState extends State<ChatPage> {
   void initState() {
     super.initState();
 
-    print("oooooooooooooooooooooooooooooooo: ${widget.chat.adminId}");
+    socket.off("delete_chat_from_chats");
 
     setState(() {
       currentUserChatPage = widget.currentUser!.deepCopy();
@@ -94,6 +95,18 @@ class ChatPageState extends State<ChatPage> {
       }
     });
 
+    socket.on("delete_chat", (data) {
+      final chatId = data["chat_id"];
+
+      if (widget.currentUser!.chats!.map((c) => c.id).toList().contains(chatId)) {
+        socket.emit("leave_room", {"room": chatId});
+
+        socket.emit("load_user_chats", {
+          "user_id": widget.currentUser!.id
+        });
+      }
+    });
+
     socket.on("leave_group_from_chats", (data) {
       final userId = data["user_id"];
       final chatId = data["chat_id"];
@@ -108,18 +121,7 @@ class ChatPageState extends State<ChatPage> {
 
     });
 
-    socket.on("delete_chat_from_chats", (data) {
-      final chatId = data["chat_id"];
-
-      if (widget.currentUser!.chats!.map((c) => c.id).toList().contains(chatId)) {
-        socket.emit("leave_room", {"room": chatId});
-
-        socket.emit("load_user_chats", {
-          "user_id": widget.currentUser!.id
-        });
-      }
-
-    });
+    
 
     socket.on('send_message', (data) {
       final message = Message.fromJson(data['message']);
@@ -127,8 +129,8 @@ class ChatPageState extends State<ChatPage> {
 
       User newUser = currentUserChatPage!.deepCopy();
       newUser.chats = [
-        newUser.chats!.where((c) => c.id == room).first, 
-        ...newUser.chats!.where((c) => c.id != room)
+        newUser.chats!.where((c) => c.id == widget.chat.id).first, 
+        ...newUser.chats!.where((c) => c.id != widget.chat.id)
       ];
       newUser.chats![0].messages = [message];
 
@@ -136,7 +138,7 @@ class ChatPageState extends State<ChatPage> {
 
       widget.setCurrentUser(newUser);
       setState(() {
-        widget.currentUser = newUser;
+        currentUserChatPage = newUser;
       });
 
       if (currentChat!.id == room) {
@@ -226,6 +228,8 @@ class ChatPageState extends State<ChatPage> {
     socket.off("load_chat_history");
     socket.off("send_message");
     socket.off("delete_message");
+    socket.off("delete_chat");
+    socket.off("leave_group_from_chats");
 
     _scrollController.dispose();
     super.dispose();
@@ -243,8 +247,7 @@ class ChatPageState extends State<ChatPage> {
           children: [
             GestureDetector(
               onTap: () {
-                Navigator.push(
-                  context,
+                Navigator.of(context, rootNavigator: true).push(
                   PageRouteBuilder(
                     pageBuilder: (context, animation, secondaryAnimation) => 
                       isGroup ? 
@@ -285,17 +288,20 @@ class ChatPageState extends State<ChatPage> {
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () {
-            socket.off("send_message");
             socket.off("load_chat_history");
+            socket.off("send_message");
+            socket.off("delete_message");
+            socket.off("delete_chat");
+            socket.off("leave_group_from_chats");
 
-            Navigator.pop(context, true);
+            Navigator.of(context, rootNavigator: true).pop();
+            // Navigator.of(context).popUntil((route) => route.isActive);
           },
         ),
         actions: [
           GestureDetector(
             onTap: () {
-              Navigator.push(
-                context,
+              Navigator.of(context, rootNavigator: true).push(
                 PageRouteBuilder(
                   pageBuilder: (context, animation, secondaryAnimation) => 
                     isGroup ? 

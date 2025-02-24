@@ -108,12 +108,11 @@ class UserProfilePageState extends State<UserProfilePage> {
         title: Text(languageProvider.localizedStrings['confirmLogout'] ?? "Confirm Logout"),
         content: Text(languageProvider.localizedStrings['logoutConfirmMessage'] ?? "Are you sure you want to log out?"),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: Text(languageProvider.localizedStrings['cancel'] ?? "Cancel")),
+          TextButton(onPressed: () => Navigator.of(context, rootNavigator: true).pop(), child: Text(languageProvider.localizedStrings['cancel'] ?? "Cancel")),
           ElevatedButton(onPressed: () async {
               await deleteDataFromStorage("accessToken");
 
-              Navigator.push(
-                context,
+              Navigator.of(context, rootNavigator: true).push(
                 PageRouteBuilder(
                   pageBuilder: (context, animation, secondaryAnimation) => const LoginPage(),
                   transitionsBuilder: (context, animation, secondaryAnimation, child) {
@@ -157,8 +156,8 @@ class UserProfilePageState extends State<UserProfilePage> {
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: Text(languageProvider.localizedStrings['cancel'] ?? "Cancel")),
-            ElevatedButton(onPressed: () => Navigator.pop(context), child: Text(languageProvider.localizedStrings['save'] ?? "Save")),
+            TextButton(onPressed: () => Navigator.of(context, rootNavigator: true).pop(), child: Text(languageProvider.localizedStrings['cancel'] ?? "Cancel")),
+            ElevatedButton(onPressed: () => Navigator.of(context, rootNavigator: true).pop(), child: Text(languageProvider.localizedStrings['save'] ?? "Save")),
           ],
         );
       },
@@ -215,8 +214,8 @@ class UserProfilePageState extends State<UserProfilePage> {
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: Text(languageProvider.localizedStrings['cancel'] ?? "Cancel")),
-            ElevatedButton(onPressed: () => Navigator.pop(context), child: Text(languageProvider.localizedStrings['save'] ?? "Save")),
+            TextButton(onPressed: () => Navigator.of(context, rootNavigator: true).pop(), child: Text(languageProvider.localizedStrings['cancel'] ?? "Cancel")),
+            ElevatedButton(onPressed: () => Navigator.of(context, rootNavigator: true).pop(), child: Text(languageProvider.localizedStrings['save'] ?? "Save")),
           ],
         ),
       ),
@@ -341,7 +340,7 @@ class UserProfilePageState extends State<UserProfilePage> {
         title: Text(languageProvider.localizedStrings['profile'] ?? 'Profile'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         centerTitle: true,
-        leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => Navigator.pop(context)),
+        leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => Navigator.of(context, rootNavigator: true).pop()),
         actions: [
           IconButton(icon: const Icon(Icons.logout, color: Colors.red), onPressed: () {_logout(languageProvider);}),
         ],

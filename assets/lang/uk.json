@@ -45,6 +45,7 @@
     "userAlreadyExists": "Користувач з таким ім'ям вже існує",
     "info": "Інфо",
     "chatCreatedSuccessfully": "Чат успішно створено",
+    "chatDeletedSuccessfully": "Чат видалено",
     "groupCreatedSuccessfully": "Групу успішно створено",
     "groupDeleted": "Групу видалено",
     "leftFromGroup": "Ви покинули групу",

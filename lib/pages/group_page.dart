@@ -99,10 +99,9 @@ class NewGroupPageState extends State<NewGroupPage> {
         return;
       }
 
-      Navigator.pop(context);
+      Navigator.of(context, rootNavigator: true).pop();
 
-      Navigator.push(
-        context,
+      Navigator.of(context, rootNavigator: true).push(
         PageRouteBuilder(
           pageBuilder: (context, animation, secondaryAnimation) => const ChatListPage(),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
@@ -132,10 +131,9 @@ class NewGroupPageState extends State<NewGroupPage> {
           return;
         }
 
-        Navigator.pop(context);
+        Navigator.of(context, rootNavigator: true).pop();
 
-        Navigator.push(
-          context,
+        Navigator.of(context, rootNavigator: true).push(
           PageRouteBuilder(
             pageBuilder: (context, animation, secondaryAnimation) => const ChatListPage(),
             transitionsBuilder: (context, animation, secondaryAnimation, child) {
@@ -177,7 +175,7 @@ class NewGroupPageState extends State<NewGroupPage> {
           "user_id": widget.currentUser!.id
         });
 
-        Navigator.pop(context);
+        Navigator.of(context, rootNavigator: true).pop();
 
         // Navigator.push(
         //   context,
@@ -319,7 +317,7 @@ class NewGroupPageState extends State<NewGroupPage> {
         ),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         centerTitle: true,
-        leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => Navigator.pop(context)),
+        leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => Navigator.of(context, rootNavigator: true).pop()),
       ),
       body: SingleChildScrollView(
         child: Padding(

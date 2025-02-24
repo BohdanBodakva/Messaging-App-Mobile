@@ -45,6 +45,7 @@
     "userAlreadyExists": "User with such username already exists",
     "info": "Info",
     "chatCreatedSuccessfully": "Chat was created successfully",
+    "chatDeletedSuccessfully": "Chat was deleted",
     "groupCreatedSuccessfully": "Group was created successfully",
     "groupDeleted": "Group was deleted",
     "leftFromGroup": "You have left from group",
