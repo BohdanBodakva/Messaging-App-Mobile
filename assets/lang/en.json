@@ -49,9 +49,11 @@
     "groupCreatedSuccessfully": "Group was created successfully",
     "groupDeleted": "Group was deleted",
     "leftFromGroup": "You have left from group",
-    "userInfoChangedSuccessfully": "User info was changed successfully",
+    "userInfoChangedSuccessfully": "Info was changed successfully",
     "groupInfo": "Group Info",
     "deleteGroup": "Delete group",
     "leaveGroup": "Leave group",
-    "groupUsers": "Users"
+    "groupUsers": "Users",
+    "typing": "Typing",
+    "isTyping": "is typing"
 }

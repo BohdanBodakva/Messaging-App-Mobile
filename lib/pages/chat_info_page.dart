@@ -1,19 +1,50 @@
 import 'package:flutter/material.dart';
-import 'package:messaging_app/handlers/messages.dart';
 import 'package:messaging_app/handlers/websocket.dart';
 import 'package:messaging_app/models/chat.dart';
 import 'package:messaging_app/models/user.dart';
-import 'package:messaging_app/pages/chat_list.dart';
 import 'package:messaging_app/providers/language_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:socket_io_client/socket_io_client.dart';
 
-class ChatInfoPage extends StatelessWidget {
+class ChatInfoPage extends StatefulWidget {
   final bool isGroup;
   final List<User>? users;
   final Chat chat;
+  final Socket socket;
 
-  const ChatInfoPage({super.key, required this.isGroup, required this.users, required this.chat});
+  const ChatInfoPage({super.key, required this.socket, required this.isGroup, required this.users, required this.chat});
+
+  @override
+  ChatInfoPageState createState() => ChatInfoPageState();
+}
+
+class ChatInfoPageState extends State<ChatInfoPage> {
+
+  @override
+  void initState() {
+    super.initState();
+    
+    _defineWebsocketOperation();
+  }
+
+  _defineWebsocketOperation(){
+    (() async {
+      await _defineWebsocketEvents();
+    })();
+  }
+
+  Future<void> _defineWebsocketEvents() async {
+    widget.socket.on("delete_chat_from_chat_info", (data) {
+      Navigator.pop(context);
+    });
+  }
+
+  @override
+  void dispose() {
+    widget.socket.off("delete_chat_from_chat_info");
+
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -35,25 +66,25 @@ class ChatInfoPage extends StatelessWidget {
           children: [
             CircleAvatar(
               radius: 50,
-              backgroundImage: AssetImage(isGroup ? "" : users![0].profilePhotoLink!),
+              backgroundImage: AssetImage(widget.isGroup ? "" : widget.users![0].profilePhotoLink!),
             ),
             const SizedBox(height: 16),
             
-            if (!isGroup)
-              _buildInfoRow(languageProvider.localizedStrings['name'] ?? "Name", users![0].name!),
-            if (!isGroup)
-              _buildInfoRow(languageProvider.localizedStrings['surname'] ?? "Surname", users![0].surname!),
-            if (!isGroup)
-              _buildInfoRow(languageProvider.localizedStrings['username'] ?? "Username", "@${users![0].username}"),
+            if (!widget.isGroup)
+              _buildInfoRow(languageProvider.localizedStrings['name'] ?? "Name", widget.users![0].name!),
+            if (!widget.isGroup)
+              _buildInfoRow(languageProvider.localizedStrings['surname'] ?? "Surname", widget.users![0].surname!),
+            if (!widget.isGroup)
+              _buildInfoRow(languageProvider.localizedStrings['username'] ?? "Username", "@${widget.users![0].username}"),
 
             const SizedBox(height: 20),
 
-            if (!isGroup)
+            if (!widget.isGroup)
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: () async => {
-                    await _showDeleteChatDialog(context, socket), 
+                    await _showDeleteChatDialog(context, widget.socket), 
                     Navigator.pop(context),
                     Navigator.pop(context),
                   },
@@ -98,10 +129,10 @@ class ChatInfoPage extends StatelessWidget {
           ElevatedButton(
             onPressed: () {
               socket.emit("delete_chat", {
-                "chat_id": chat.id
+                "chat_id": widget.chat.id
               });
 
-              Navigator.of(context, rootNavigator: true).pop();
+              Navigator.pop(context);
             },
             child: Text(languageProvider.localizedStrings['delete'] ?? "Delete"),
           ),

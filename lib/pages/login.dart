@@ -7,6 +7,7 @@ import 'package:messaging_app/providers/language_provider.dart';
 import 'package:messaging_app/widgets/error_message.dart';
 import 'package:provider/provider.dart';
 import 'dart:convert';
+
 import 'package:shared_preferences/shared_preferences.dart';
 
 class LoginPage extends StatefulWidget {
@@ -72,10 +73,16 @@ class LoginPageState extends State<LoginPage> {
 
     (() async {
       final token = await getDataFromStorage("accessToken");
+      final stringUserId = await getDataFromStorage("user_id");
+
+      if (stringUserId == null) return;
+
+      final userId = int.parse(stringUserId);
+
       if (token != null) {
         Navigator.of(context, rootNavigator: true).push(
           PageRouteBuilder(
-            pageBuilder: (context, animation, secondaryAnimation) => const ChatListPage(),
+            pageBuilder: (context, animation, secondaryAnimation) => ChatListPage(userId: userId,),
             transitionsBuilder: (context, animation, secondaryAnimation, child) {
               const begin = Offset(1.0, 0.0);
               const end = Offset.zero;
@@ -343,9 +350,13 @@ class LoginForm extends StatelessWidget {
             if (error == null) {
               await saveDataToStorage("accessToken", response[0]["access_token"]);
 
+              final userId = response[0]["user_id"];
+              debugPrint("USER____________ID: $userId");
+              await saveDataToStorage("user_id", userId.toString());
+
               Navigator.of(context, rootNavigator: true).push(
                 PageRouteBuilder(
-                  pageBuilder: (context, animation, secondaryAnimation) => const ChatListPage(),
+                  pageBuilder: (context, animation, secondaryAnimation) => ChatListPage(userId: userId),
                   transitionsBuilder: (context, animation, secondaryAnimation, child) {
                     const begin = Offset(1.0, 0.0);
                     const end = Offset.zero;

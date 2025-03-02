@@ -53,5 +53,7 @@
     "groupInfo": "Інформація про групу",
     "deleteGroup": "Видалити групу",
     "leaveGroup": "Покинути групу",
-    "groupUsers": "Користувачі"
+    "groupUsers": "Користувачі",
+    "typing": "Пише",
+    "isTyping": "пише"
 }

@@ -16,10 +16,13 @@ import 'package:messaging_app/services/notifications_service.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_background/flutter_background.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:socket_io_client/socket_io_client.dart';
 
 class ChatListPage extends StatefulWidget  {
 
-  const ChatListPage({super.key});
+  final userId;
+
+  const ChatListPage({super.key, required this.userId});
 
   @override
   ChatListPageState createState() => ChatListPageState();
@@ -31,6 +34,8 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
   int? userId;
   User? currentUser;
   int? selectedChatId;
+
+  late Socket socket;
 
   List<User> foundUsers = [];
 
@@ -120,6 +125,8 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
   @override
   void initState() {
     super.initState();
+
+    socket = connectToSocket(widget.userId);
 
     notificationService = NotificationService();
     (() async {
@@ -218,6 +225,7 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
         ...newUser.chats!.where((c) => c.id != room)
       ];
       newUser.chats![0].messages = [message];
+      newUser.unreadMessages!.add(message);
 
       setState(() {
         currentUser = newUser;
@@ -269,6 +277,33 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
 
     });
 
+    socket.on("leave_group_from_chats", (data) {
+      final chatId = data["chat_id"];
+
+      socket.emit("leave_room", {"room": chatId});
+
+      socket.emit("load_user_chats", {
+        "user_id": currentUser!.id
+      });
+    });
+
+    socket.on("change_group_info_from_chat_list", (data) {
+      Chat group = Chat.fromJson(data["updated_group"]);
+
+      if (currentUser!.chats!.map((c) => c.id).contains(group.id)) {
+        final groupUsersIds = group.users!.map((u) => u.id).toList();
+
+        if (!groupUsersIds.contains(currentUser!.id)) {
+          socket.emit("leave_room", {"room": group.id});
+        }
+
+        socket.emit("load_user_chats", {
+          "user_id": currentUser!.id
+        });
+      }
+
+    });
+
     socket.on("delete_chat_from_chats", (data) {
       final chatId = data["chat_id"];
 
@@ -279,11 +314,10 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
           "user_id": currentUser!.id
         });
       }
-
     });
 
     socket.on("search_users_by_username", (data) {
-      List<User> searchedUsers = (data["users"] as List).map((u) => User.fromJson(u)).toList();
+      List<User> searchedUsers = (data["users"] as List).map((u) => User.fromJson(u)).where((u) => u.id != currentUser!.id).toList();
 
       setState(() {
         foundUsers = searchedUsers;
@@ -336,7 +370,7 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
 
         Navigator.of(context, rootNavigator: true).push(
           PageRouteBuilder(
-            pageBuilder: (context, animation, secondaryAnimation) => ChatPage(chat: chatWithUser!, currentUser: currentUser, setCurrentUser: setCurrentUser),
+            pageBuilder: (context, animation, secondaryAnimation) => ChatPage(socket: socket, chat: chatWithUser!, currentUser: currentUser, setCurrentUser: setCurrentUser),
             transitionsBuilder: (context, animation, secondaryAnimation, child) {
               const begin = Offset(1.0, 0.0);
               const end = Offset.zero;
@@ -349,22 +383,6 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
             },
           )
         );
-
-        // Navigator.of(context, rootNavigator: true).push(
-        //   PageRouteBuilder(
-        //     pageBuilder: (context, animation, secondaryAnimation) => ChatPage(chat: chat, currentUser: currentUser, setCurrentUser: setCurrentUser),
-        //     transitionsBuilder: (context, animation, secondaryAnimation, child) {
-        //       const begin = Offset(1.0, 0.0);
-        //       const end = Offset.zero;
-        //       const curve = Curves.easeInOut;
-
-        //       var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
-        //       var offsetAnimation = animation.drive(tween);
-
-        //       return SlideTransition(position: offsetAnimation, child: child);
-        //     },
-        //   )
-        // );
 
         showSuccessToast(
           context, 
@@ -416,7 +434,7 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
         }
         break;
         
-      case AppLifecycleState.paused:
+      case AppLifecycleState.paused || AppLifecycleState.detached:
         socket.emit("go_offline", {"user_id": currentUser!.id});
 
         debugPrint("App paused, managing background state...");
@@ -441,6 +459,8 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+
+    socket.disconnect();
     socket.dispose();
     super.dispose();
   }
@@ -467,7 +487,7 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
 
       Navigator.of(context, rootNavigator: true).push(
         PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) => ChatPage(chat: chatWithUser!, currentUser: currentUser, setCurrentUser: setCurrentUser),
+          pageBuilder: (context, animation, secondaryAnimation) => ChatPage(socket: socket, chat: chatWithUser!, currentUser: currentUser, setCurrentUser: setCurrentUser),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             const begin = Offset(1.0, 0.0);
             const end = Offset.zero;
@@ -498,7 +518,7 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
 
       Navigator.of(context, rootNavigator: true).push(
         PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) => ChatPage(chat: chatWithUser, currentUser: currentUser, setCurrentUser: setCurrentUser),
+          pageBuilder: (context, animation, secondaryAnimation) => ChatPage(socket: socket, chat: chatWithUser, currentUser: currentUser, setCurrentUser: setCurrentUser),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             const begin = Offset(1.0, 0.0);
             const end = Offset.zero;
@@ -611,7 +631,7 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
                   onTap: () async {
                     Navigator.of(context, rootNavigator: true).push(
                       PageRouteBuilder(
-                        pageBuilder: (context, animation, secondaryAnimation) => UserProfilePage(currentUser: currentUser, setCurrentUser: setCurrentUser),
+                        pageBuilder: (context, animation, secondaryAnimation) => UserProfilePage(socket: socket, currentUser: currentUser, setCurrentUser: setCurrentUser),
                         transitionsBuilder: (context, animation, secondaryAnimation, child) {
                           const begin = Offset(1.0, 0.0);
                           const end = Offset.zero;
@@ -638,6 +658,7 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
                 Navigator.of(context, rootNavigator: true).push(
                   PageRouteBuilder(
                     pageBuilder: (context, animation, secondaryAnimation) => NewGroupPage(
+                                                            socket: socket, 
                                                             currentUser: currentUser, 
                                                             setCurrentUser: setCurrentUser, 
                                                             isEditing: false, 
@@ -663,7 +684,7 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
                 onPressed: () {
                   Navigator.of(context, rootNavigator: true).push(
                     PageRouteBuilder(
-                      pageBuilder: (context, animation, secondaryAnimation) => UserProfilePage(currentUser: currentUser, setCurrentUser: setCurrentUser),
+                      pageBuilder: (context, animation, secondaryAnimation) => UserProfilePage(socket: socket, currentUser: currentUser, setCurrentUser: setCurrentUser),
                       transitionsBuilder: (context, animation, secondaryAnimation, child) {
                         const begin = Offset(1.0, 0.0);
                         const end = Offset.zero;
@@ -786,7 +807,7 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
 
                             Navigator.of(context, rootNavigator: true).push(
                               PageRouteBuilder(
-                                pageBuilder: (context, animation, secondaryAnimation) => ChatPage(chat: chat, currentUser: currentUser, setCurrentUser: setCurrentUser),
+                                pageBuilder: (context, animation, secondaryAnimation) => ChatPage(socket: socket, chat: chat, currentUser: currentUser, setCurrentUser: setCurrentUser),
                                 transitionsBuilder: (context, animation, secondaryAnimation, child) {
                                   const begin = Offset(1.0, 0.0);
                                   const end = Offset.zero;
@@ -837,6 +858,8 @@ class ChatItem extends StatelessWidget {
 
     List<User>? otherUsers = chat!.users!.where((user) => user.id != currentUser!.id).toList();
     String chatName = chat!.isGroup == true ? chat!.name! : "${otherUsers[0].name!} ${otherUsers[0].surname!}";
+
+    print("USER HAS UNREAD MESSAGES");
 
     String lastmessageText = "";
     if (chat!.messages!.isNotEmpty) {
@@ -902,7 +925,9 @@ class ChatItem extends StatelessWidget {
                 lastmessageSendTime ?? "",
                 style: const TextStyle(fontSize: 12, color: Colors.grey),
               ),
-              if (index % 3 == 0)
+              if (currentUser!.unreadMessages!.map((m) => m.id).toList().any(
+                (el) => chat!.messages!.map((m) => m.id).toList().contains(el)
+              ))
                 Padding(
                   padding: const EdgeInsets.only(left: 8),
                   child: Container(

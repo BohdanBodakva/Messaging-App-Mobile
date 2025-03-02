@@ -3,18 +3,19 @@ import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:messaging_app/handlers/messages.dart';
 import 'package:messaging_app/handlers/shared_prefs.dart';
-import 'package:messaging_app/handlers/websocket.dart';
 import 'package:messaging_app/models/user.dart';
 import 'package:messaging_app/pages/login.dart';
 import 'package:messaging_app/providers/language_provider.dart';
 import 'package:messaging_app/providers/notification_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:socket_io_client/socket_io_client.dart';
 
 class UserProfilePage extends StatefulWidget {
   final User? currentUser;
   final Function setCurrentUser;
+  final Socket socket;
 
-  const UserProfilePage({super.key, required this.currentUser, required this.setCurrentUser});
+  const UserProfilePage({super.key, required this.socket, required this.currentUser, required this.setCurrentUser});
 
   @override
   UserProfilePageState createState() => UserProfilePageState();
@@ -58,7 +59,7 @@ class UserProfilePageState extends State<UserProfilePage> {
   }
 
   Future<void> _defineSocketEvents() async {
-    socket.on("change_user_info", (data) {
+    widget.socket.on("change_user_info", (data) {
 
       final newUser = User.fromJson(data["user"], includeChats: false);
 
@@ -80,7 +81,7 @@ class UserProfilePageState extends State<UserProfilePage> {
       );
     });
 
-    socket.on("change_user_info_username_exists", (data) {
+    widget.socket.on("change_user_info_username_exists", (data) {
       setState(() {
         isUsernameExist = true;
         isLoading = false;
@@ -309,7 +310,7 @@ class UserProfilePageState extends State<UserProfilePage> {
         isUsernameInputValid = false;
       });
     } else {
-      socket.emit("change_user_info", {
+      widget.socket.emit("change_user_info", {
         "user_id": profileUser!.id,
         "new_name": name,
         "new_surname": surname,
@@ -325,8 +326,8 @@ class UserProfilePageState extends State<UserProfilePage> {
 
   @override
   void dispose() {
-    socket.off("change_user_info");
-    socket.off("change_user_info_username_exists");
+    widget.socket.off("change_user_info");
+    widget.socket.off("change_user_info_username_exists");
 
     super.dispose();
   }

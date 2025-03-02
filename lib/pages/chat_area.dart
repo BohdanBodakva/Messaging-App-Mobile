@@ -2,22 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:messaging_app/handlers/date_time.dart';
-import 'package:messaging_app/handlers/websocket.dart';
 import 'package:messaging_app/models/chat.dart';
 import 'package:messaging_app/models/message.dart';
 import 'package:messaging_app/models/user.dart';
 import 'package:messaging_app/pages/chat_info_page.dart';
-import 'package:messaging_app/pages/chat_list.dart';
 import 'package:messaging_app/pages/group_page.dart';
 import 'package:messaging_app/providers/language_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:socket_io_client/socket_io_client.dart';
 
 class ChatPage extends StatefulWidget {
   final Chat chat;
   User? currentUser;
   Function setCurrentUser;
+  Socket socket;
 
-  ChatPage({super.key, required this.chat, required this.currentUser, required this.setCurrentUser});
+  ChatPage({super.key, required this.socket, required this.chat, required this.currentUser, required this.setCurrentUser});
 
   @override
   ChatPageState createState() => ChatPageState();
@@ -26,6 +26,9 @@ class ChatPage extends StatefulWidget {
 class ChatPageState extends State<ChatPage> {
   bool isListening = false;
   bool isLoading = true;
+
+  bool isTyping = false;
+  String fullUserNameTyping = "";
 
   User? currentUserChatPage;
   Chat? currentChat;
@@ -46,8 +49,6 @@ class ChatPageState extends State<ChatPage> {
   void initState() {
     super.initState();
 
-    socket.off("delete_chat_from_chats");
-
     setState(() {
       currentUserChatPage = widget.currentUser!.deepCopy();
       currentChat = widget.chat.deepCopy();
@@ -55,7 +56,13 @@ class ChatPageState extends State<ChatPage> {
 
     isGroup = currentChat!.isGroup!;
     otherUsers = currentChat!.users!.where((user) => user.id != currentUserChatPage!.id).toList();
-    chatName = currentChat!.isGroup == true ? currentChat!.name! : otherUsers![0].name!;
+
+    // chatName = currentChat!.isGroup == true ? currentChat!.name! : otherUsers![0].name!;
+    if (isGroup) {
+      chatName = currentChat!.name!;
+    } else {
+      chatName = currentUserChatPage!.name!;
+    }
     
     _loadChatHistory();
   }
@@ -67,7 +74,7 @@ class ChatPageState extends State<ChatPage> {
   }
 
   Future<void> _defineSocketEvents() async {
-    socket.on("load_chat_history", (data) {
+    widget.socket.on("load_chat_history", (data) {
       final history = (data["chat_history"] as List).map((msg) => Message.fromJson(msg)).toList();
       final isEnd = data["is_end"].toString().toLowerCase() == "true";
 
@@ -95,35 +102,40 @@ class ChatPageState extends State<ChatPage> {
       }
     });
 
-    socket.on("delete_chat", (data) {
+    widget.socket.on("delete_chat", (data) {
       final chatId = data["chat_id"];
 
-      if (widget.currentUser!.chats!.map((c) => c.id).toList().contains(chatId)) {
-        socket.emit("leave_room", {"room": chatId});
-
-        socket.emit("load_user_chats", {
-          "user_id": widget.currentUser!.id
-        });
+      if (chatId == currentChat!.id) {
+        Navigator.pop(context);
       }
     });
 
-    socket.on("leave_group_from_chats", (data) {
+    widget.socket.on("leave_group_from_chat_area", (data) {
       final userId = data["user_id"];
       final chatId = data["chat_id"];
 
       if (userId == widget.currentUser!.id && widget.currentUser!.chats!.map((c) => c.id).toList().contains(chatId)) {
-        socket.emit("leave_room", {"room": chatId});
-
-        socket.emit("load_user_chats", {
-          "user_id": widget.currentUser!.id
-        });
+        Navigator.pop(context);
       }
+    });  
 
+    widget.socket.on("change_group_info_from_chat_area", (data) {
+      Chat group = Chat.fromJson(data["updated_group"]);
+
+      if (group.id == widget.chat.id) {
+        final groupUsersIds = group.users!.map((u) => u.id).toList();
+
+        if (group.adminId == widget.currentUser!.id) {
+          
+        } else {
+          if (!groupUsersIds.contains(widget.currentUser!.id)) {
+            Navigator.pop(context);
+          }
+        }
+      }
     });
 
-    
-
-    socket.on('send_message', (data) {
+    widget.socket.on('send_message', (data) {
       final message = Message.fromJson(data['message']);
       final room = data['room'];
 
@@ -155,7 +167,30 @@ class ChatPageState extends State<ChatPage> {
       
     });
 
-    socket.on('delete_message', (data) {
+    widget.socket.on("user_typing", (data) {
+      final userId = data["user_id"];
+      final name = data["name"];
+      final surname = data["surname"];
+
+      if (userId == currentUserChatPage!.id) return;
+
+      if (!mounted) return;
+
+      setState(() {
+        isTyping = true;
+        fullUserNameTyping = "$name $surname";
+      });
+
+      // Hide "typing" status after 2 seconds
+      Future.delayed(const Duration(seconds: 2), () {
+        setState(() {
+          isTyping = false;
+          fullUserNameTyping = "";
+        });
+      });
+    });
+
+    widget.socket.on('delete_message', (data) {
       final messageId = data['message_id'];
 
       setState(() {
@@ -164,7 +199,7 @@ class ChatPageState extends State<ChatPage> {
       });
     });
 
-    socket.emit("load_chat_history", {
+    widget.socket.emit("load_chat_history", {
       "chat_id": currentChat!.id,
       "items_count": itemsCount,
       "offset": loadHistoryOffset
@@ -195,7 +230,7 @@ class ChatPageState extends State<ChatPage> {
     if (_messageController.text.isNotEmpty) {
       String messageText = _messageController.text.trim();
 
-      socket.emit("send_message", {
+      widget.socket.emit("send_message", {
         "text": messageText,
         "sent_at": DateTime.now().toIso8601String(),
         "sent_files": [],
@@ -217,7 +252,7 @@ class ChatPageState extends State<ChatPage> {
   }
 
   void _deleteMessage(int index) {
-    socket.emit("delete_message", {
+    widget.socket.emit("delete_message", {
       "message_id": index,
       "room": currentChat!.id
     });
@@ -225,14 +260,25 @@ class ChatPageState extends State<ChatPage> {
 
   @override
   void dispose() {
-    socket.off("load_chat_history");
-    socket.off("send_message");
-    socket.off("delete_message");
-    socket.off("delete_chat");
-    socket.off("leave_group_from_chats");
+    widget.socket.off("load_chat_history");
+    widget.socket.off("send_message");
+    widget.socket.off("delete_message");
+    widget.socket.off("delete_chat");
+    widget.socket.off("leave_group_from_chat_area");
+    widget.socket.off("user_typing");
 
     _scrollController.dispose();
     super.dispose();
+  }
+
+  void sendTypingEvent() {
+    widget.socket.emit(
+      'typing', 
+      {
+        'user_id': currentUserChatPage!.id, 
+        "chat_id": currentChat!.id
+      }
+    );
   }
 
   @override
@@ -252,10 +298,10 @@ class ChatPageState extends State<ChatPage> {
                     pageBuilder: (context, animation, secondaryAnimation) => 
                       isGroup ? 
                       NewGroupPage(
-                        currentUser: widget.currentUser, setCurrentUser: widget.setCurrentUser, isEditing: true, group: widget.chat, openGroupChat: (){},
+                        socket: widget.socket, currentUser: widget.currentUser, setCurrentUser: widget.setCurrentUser, isEditing: true, group: widget.chat, openGroupChat: (){},
                       ) :
                       ChatInfoPage(
-                        isGroup: isGroup, users: otherUsers, chat: currentChat!,
+                        socket: widget.socket, isGroup: isGroup, users: otherUsers, chat: currentChat!,
                       ),
                     transitionsBuilder: (context, animation, secondaryAnimation, child) {
                       const begin = Offset(1.0, 0.0);
@@ -276,9 +322,24 @@ class ChatPageState extends State<ChatPage> {
                     const Icon(Icons.group),
                   if (widget.chat.isGroup!)
                     const SizedBox(width: 7),
-                  Text(
-                    isGroup ? chatName : "${otherUsers![0].name} ${otherUsers![0].surname}", 
-                    style: const TextStyle(fontSize: 18)
+                  Column(
+                    children: [
+                      Text(
+                        isGroup ? chatName : "${otherUsers![0].name} ${otherUsers![0].surname}", 
+                        style: const TextStyle(fontSize: 18)
+                      ),
+                      if (isTyping)
+                        Text(
+                          !isGroup ? 
+                            "${languageProvider.localizedStrings["typing"]}..." : 
+                            "$fullUserNameTyping ${languageProvider.localizedStrings["isTyping"]}...", 
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white
+                          )
+                        ),    
+                    ],
                   ),
                 ],
               ),
@@ -288,14 +349,22 @@ class ChatPageState extends State<ChatPage> {
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () {
-            socket.off("load_chat_history");
-            socket.off("send_message");
-            socket.off("delete_message");
-            socket.off("delete_chat");
-            socket.off("leave_group_from_chats");
+            widget.socket.off("load_chat_history");
+            widget.socket.off("send_message");
+            widget.socket.off("delete_message");
+            widget.socket.off("delete_chat");
+            widget.socket.off("leave_group_from_chats");
+
+            widget.socket.emit("read_chat_history", {
+              "user_id": widget.currentUser!.id,
+              "chat_id": widget.chat.id
+            });
+            widget.socket.emit(
+              "load_user", 
+              {"user_id": widget.currentUser!.id}
+            );
 
             Navigator.of(context, rootNavigator: true).pop();
-            // Navigator.of(context).popUntil((route) => route.isActive);
           },
         ),
         actions: [
@@ -306,10 +375,10 @@ class ChatPageState extends State<ChatPage> {
                   pageBuilder: (context, animation, secondaryAnimation) => 
                     isGroup ? 
                     NewGroupPage(
-                      currentUser: widget.currentUser, setCurrentUser: widget.setCurrentUser, isEditing: true, group: widget.chat, openGroupChat: (){},
+                      socket: widget.socket, currentUser: widget.currentUser, setCurrentUser: widget.setCurrentUser, isEditing: true, group: widget.chat, openGroupChat: (){},
                     ) :
                     ChatInfoPage(
-                      isGroup: isGroup, users: otherUsers, chat: currentChat!,
+                      socket: widget.socket, isGroup: isGroup, users: otherUsers, chat: currentChat!,
                     ),
                   transitionsBuilder: (context, animation, secondaryAnimation, child) {
                     const begin = Offset(1.0, 0.0);
@@ -353,21 +422,37 @@ class ChatPageState extends State<ChatPage> {
                     controller: _scrollController,
                     itemCount: chatHistory.length,
                     itemBuilder: (context, index) {
-                      return ChatMessageItem(
-                        index: chatHistory[index].id!,
-                        message: chatHistory[index],
-                        currentUser: currentUserChatPage!,
-                        chat: currentChat!,
-                        isGroup: currentChat!.isGroup!,
-                        isSelectedForDeletion: _selectedDeleteIndex == chatHistory[index].id!,
-                        onDelete: () => _deleteMessage(chatHistory[index].id!),
-                        onLongPress: () {
-                          if (chatHistory[index].userId! == currentUserChatPage!.id) {
-                            setState(() {
-                              _selectedDeleteIndex = chatHistory[index].id!;
-                            });
-                          }
-                        },
+                      final prevMessageId = index > 0 ? chatHistory[index - 1].id : null;
+                      final currMessageId = chatHistory[index].id;
+
+                      final unreadMessages = currentUserChatPage!.unreadMessages!;
+
+                      return Column (
+                        children: [
+                          if (prevMessageId != null && unreadMessages.contains(currMessageId) && !unreadMessages.contains(prevMessageId))
+                            const Divider(
+                              color: Colors.blue,
+                              thickness: 3,
+                              indent: 10,
+                              endIndent: 10,
+                            ),
+                          ChatMessageItem(
+                            index: chatHistory[index].id!,
+                            message: chatHistory[index],
+                            currentUser: currentUserChatPage!,
+                            chat: currentChat!,
+                            isGroup: currentChat!.isGroup!,
+                            isSelectedForDeletion: _selectedDeleteIndex == chatHistory[index].id!,
+                            onDelete: () => _deleteMessage(chatHistory[index].id!),
+                            onLongPress: () {
+                              if (chatHistory[index].userId! == currentUserChatPage!.id) {
+                                setState(() {
+                                  _selectedDeleteIndex = chatHistory[index].id!;
+                                });
+                              }
+                            },
+                          )
+                        ],
                       );
                     },
                   ),
@@ -389,6 +474,9 @@ class ChatPageState extends State<ChatPage> {
                           controller: _messageController,
                           maxLines: null,
                           keyboardType: TextInputType.multiline,
+                          onChanged: (text) {
+                            if (text.isNotEmpty) sendTypingEvent();
+                          },
                           decoration: InputDecoration(
                             hintText: "${languageProvider.localizedStrings['typeMessage']}...",
                             border: const OutlineInputBorder(),

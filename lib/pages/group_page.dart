@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:messaging_app/handlers/messages.dart';
-import 'package:messaging_app/handlers/websocket.dart';
 import 'package:messaging_app/models/chat.dart';
 import 'package:messaging_app/models/user.dart';
-import 'package:messaging_app/pages/chat_list.dart';
+import 'package:messaging_app/pages/chat_area.dart';
 import 'package:messaging_app/providers/language_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:socket_io_client/socket_io_client.dart';
 
 class NewGroupPage extends StatefulWidget {
   final User? currentUser;
@@ -14,8 +14,9 @@ class NewGroupPage extends StatefulWidget {
   final bool isEditing;
   final Chat group;
   final Function openGroupChat;
+  final Socket socket;
 
-  const NewGroupPage({super.key, required this.currentUser, required this.setCurrentUser, required this.isEditing, required this.group, required this.openGroupChat});
+  const NewGroupPage({super.key, required this.socket, required this.currentUser, required this.setCurrentUser, required this.isEditing, required this.group, required this.openGroupChat});
 
   @override
   NewGroupPageState createState() => NewGroupPageState();
@@ -31,6 +32,8 @@ class NewGroupPageState extends State<NewGroupPage> {
 
   List<User> _foundUsers = [];
   List<User> _selectedUsers = [];
+
+  List<User> _selectedUsersCopy = [];
 
   late final bool isAdmin;
 
@@ -48,7 +51,11 @@ class NewGroupPageState extends State<NewGroupPage> {
       _groupNameController = TextEditingController(text: widget.group.name ?? "");
 
       setState(() {
-        _selectedUsers = widget.group.users!.where((u) => u.id != widget.currentUser!.id).toList();
+        _selectedUsers = widget.group.users!;
+      });
+
+      setState(() {
+        _selectedUsersCopy = [..._selectedUsers];
       });
     }
 
@@ -56,7 +63,7 @@ class NewGroupPageState extends State<NewGroupPage> {
       _selectedUsers = [widget.currentUser!.deepCopy()];
     }
 
-    socket.on("search_users_for_group", (data) {
+    widget.socket.on("search_users_for_group", (data) {
       if ((isAdmin && widget.isEditing) || (!isAdmin && !widget.isEditing)) {
         List<User> searchedUsers = (data["users"] as List).map((u) => User.fromJson(u)).toList();
       
@@ -72,58 +79,51 @@ class NewGroupPageState extends State<NewGroupPage> {
       
     });
 
-    socket.on("change_group_info", (data) {
-      // if ((isAdmin && widget.isEditing) || (!isAdmin && !widget.isEditing)) {
-      //   List<User> searchedUsers = (data["users"] as List).map((u) => User.fromJson(u)).toList();
-      
-      //   List<User> filteredList = searchedUsers.where(
-      //     (u) => u.id != widget.currentUser!.id && 
-      //     !_selectedUsers.map((u1) => u1.id
-      //   ).toList().contains(u.id)).toList();
+    widget.socket.on("change_group_info", (data) {
+      Chat group = Chat.fromJson(data["updated_group"]);
 
-      //   setState(() {
-      //     _foundUsers = filteredList;
-      //   });
-      // }
-      
+      if (group.id == widget.group.id) {
+        final groupUsersIds = group.users!.map((u) => u.id).toList();
+
+        if (group.adminId == widget.currentUser!.id) {
+          showSuccessToast(
+            context, 
+            Provider.of<LanguageProvider>(context, listen: false).localizedStrings["userInfoChangedSuccessfully"] ?? "Info was changed successfully"
+          );
+        } else {
+          if (!groupUsersIds.contains(widget.currentUser!.id)) {
+            Navigator.pop(context);
+            Navigator.pop(context);
+          }
+        }
+      }
     });
 
-    socket.on("leave_group", (data) {
+    widget.socket.on("leave_group", (data) {
       final userId = data["user_id"];
       final chatId = data["chat_id"];
 
-      print("${userId} - ${widget.currentUser!.id}");
-      print("${chatId} - ${widget.group.id}");
-
-      if (userId != widget.currentUser!.id || chatId != widget.group.id) {
+      if (chatId != widget.group.id) {
         return;
       }
 
-      Navigator.of(context, rootNavigator: true).pop();
+      widget.socket.emit("load_user_chats", {
+        "user_id": widget.currentUser!.id
+      });
 
-      Navigator.of(context, rootNavigator: true).push(
-        PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) => const ChatListPage(),
-          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            const begin = Offset(1.0, 0.0);
-            const end = Offset.zero;
-            const curve = Curves.easeInOut;
+      if (userId == widget.currentUser!.id) {
+        widget.socket.emit("leave_room", {"room": chatId});
 
-            var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
-            var offsetAnimation = animation.drive(tween);
+        Navigator.pop(context);
 
-            return SlideTransition(position: offsetAnimation, child: child);
-          },
-        )
-      );
-
-      showSuccessToast(
-        context, 
-        Provider.of<LanguageProvider>(context, listen: false).localizedStrings["leftFromGroup"] ?? "You have left from group"
-      );
+        showSuccessToast(
+          context, 
+          Provider.of<LanguageProvider>(context, listen: false).localizedStrings["leftFromGroup"] ?? "You have left from group"
+        );
+      }
     });
 
-    socket.on("delete_chat", (data) {
+    widget.socket.on("delete_chat_from_chat_info", (data) {
       if (isAdmin == true) {
         final chatId = data["chat_id"];
 
@@ -131,11 +131,41 @@ class NewGroupPageState extends State<NewGroupPage> {
           return;
         }
 
-        Navigator.of(context, rootNavigator: true).pop();
+        showSuccessToast(
+          context, 
+          Provider.of<LanguageProvider>(context, listen: false).localizedStrings["groupDeleted"] ?? "Group was deleted"
+        );
+      }
+
+      Navigator.pop(context);
+    });
+
+    widget.socket.on("create_group", (data) {
+      final currentUserId = data["current_user_id"];
+      final users = (data["users"] as List).map((u) => User.fromJson(u)).toList();
+      final userIds = users.map((u) => u.id).toList();
+      final chat = Chat.fromJson(data["chat"]);
+
+      if (currentUserId == widget.currentUser!.id) {
+        widget.socket.emit("load_user_chats", {
+          "user_id": widget.currentUser!.id
+        });
+
+        widget.socket.emit("join_room", {"room": chat.id});
+
+        User user = widget.currentUser!.deepCopy();
+        user.chats = [chat, ...user.chats!];
+
+        widget.setCurrentUser(user);
+
+        Chat? chatWithUser = widget.currentUser!.chats!.firstWhere(
+          (c) => c.id == chat.id,
+          orElse: () => null
+        );
 
         Navigator.of(context, rootNavigator: true).push(
           PageRouteBuilder(
-            pageBuilder: (context, animation, secondaryAnimation) => const ChatListPage(),
+            pageBuilder: (context, animation, secondaryAnimation) => ChatPage(socket: widget.socket, chat: chatWithUser!, currentUser: widget.currentUser, setCurrentUser: widget.setCurrentUser),
             transitionsBuilder: (context, animation, secondaryAnimation, child) {
               const begin = Offset(1.0, 0.0);
               const end = Offset.zero;
@@ -151,60 +181,13 @@ class NewGroupPageState extends State<NewGroupPage> {
 
         showSuccessToast(
           context, 
-          Provider.of<LanguageProvider>(context, listen: false).localizedStrings["groupDeleted"] ?? "Group was deleted"
-        );
-      }
-      
-    });
-
-    socket.on("create_group", (data) {
-      final currentUserId = data["current_user_id"];
-      final users = (data["users"] as List).map((u) => User.fromJson(u)).toList();
-      final userIds = users.map((u) => u.id).toList();
-      final chat = Chat.fromJson(data["chat"]);
-
-      if (currentUserId == widget.currentUser!.id) {
-        socket.emit("join_room", {"room": chat.id});
-
-        User user = widget.currentUser!.deepCopy();
-        user.chats = [chat, ...user.chats!];
-
-        widget.setCurrentUser(user);
-
-        socket.emit("load_user_chats", {
-          "user_id": widget.currentUser!.id
-        });
-
-        Navigator.of(context, rootNavigator: true).pop();
-
-        // Navigator.push(
-        //   context,
-        //   PageRouteBuilder(
-        //     pageBuilder: (context, animation, secondaryAnimation) => ChatPage(chat: chat, currentUser: widget.currentUser, setCurrentUser: widget.setCurrentUser),
-        //     transitionsBuilder: (context, animation, secondaryAnimation, child) {
-        //       const begin = Offset(1.0, 0.0);
-        //       const end = Offset.zero;
-        //       const curve = Curves.easeInOut;
-
-        //       var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
-        //       var offsetAnimation = animation.drive(tween);
-
-        //       return SlideTransition(position: offsetAnimation, child: child);
-        //     },
-        //   )
-        // );
-
-        widget.openGroupChat(chat.id);
-
-        showSuccessToast(
-          context, 
-          Provider.of<LanguageProvider>(context, listen: false).localizedStrings["groupCreatedSuccessfully"] ?? "Group was created successfully"
+          Provider.of<LanguageProvider>(context, listen: false).localizedStrings["chatCreatedSuccessfully"] ?? "Chat was created successfully"
         );
 
       } else if (userIds.contains(widget.currentUser!.id)) {
-        socket.emit("join_room", {"room": chat.id});
+        widget.socket.emit("join_room", {"room": chat.id});
         
-        socket.emit("load_user_chats", {
+        widget.socket.emit("load_user_chats", {
           "user_id": widget.currentUser!.id
         });
       }
@@ -234,7 +217,7 @@ class NewGroupPageState extends State<NewGroupPage> {
     });
 
     if (_searchController.text.isNotEmpty) {
-      socket.emit("search_users_for_group", {
+      widget.socket.emit("search_users_for_group", {
         "username_value": _searchController.text
       });
     }
@@ -252,7 +235,7 @@ class NewGroupPageState extends State<NewGroupPage> {
         isGroupNameValid = false;
       });
     } else {
-      socket.emit("create_group", {
+      widget.socket.emit("create_chat", {
         "current_user_id": widget.currentUser!.id,
         "user_ids": _selectedUsers.map((u) => u.id).where((id) => id != widget.currentUser!.id).toList(),
         "is_group": true,
@@ -260,19 +243,21 @@ class NewGroupPageState extends State<NewGroupPage> {
         "name": groupName,
         "chat_photo_link": null
       });
+
+      Navigator.pop(context);
     }
   }
 
   void _deleteGroup() {
     if (widget.group.adminId == widget.currentUser!.id) {
-      socket.emit("delete_chat", {
+      widget.socket.emit("delete_chat", {
         "chat_id": widget.group.id
       });
     }
   }
 
   void _leaveGroup() {
-    socket.emit("leave_group", {
+    widget.socket.emit("leave_group", {
       "user_id": widget.currentUser!.id,
       "chat_id": widget.group.id
     });
@@ -284,22 +269,39 @@ class NewGroupPageState extends State<NewGroupPage> {
         _foundUsers = [];
       });
     } else {
-      socket.emit("search_users_for_group", {
+      widget.socket.emit("search_users_for_group", {
         "username_value": value
       });
     }
   }
 
   void _saveGroupChanges() {
+    final newGroupName = _groupNameController.text;
+    final newSelectedUsersIdsSet = _selectedUsers.map((u) => u.id).toSet();
+    final oldSelectedUsersIdsSet = _selectedUsersCopy.map((u) => u.id).toSet();
 
+    if ((newGroupName != widget.group.name) || (newSelectedUsersIdsSet != oldSelectedUsersIdsSet)){
+      if (newGroupName.isEmpty) {
+          
+      } else {
+        widget.socket.emit("change_group_info", {
+          "group_id": widget.group.id,
+          "new_user_ids": newSelectedUsersIdsSet.toList(),
+          "new_name": newGroupName,
+          "new_chat_photo_link": null
+        });
+      }
+    }
   }
 
   @override
   void dispose() {
-    socket.off("search_users_for_group");
-    socket.off("create_group");
-    socket.off("delete_chat");
-    socket.off("leave_chat");
+    widget.socket.off("search_users_for_group");
+    widget.socket.off("create_group");
+    widget.socket.off("leave_chat");
+    widget.socket.off("change_group_info");
+    widget.socket.off("leave_group");
+    widget.socket.off("delete_chat_from_chat_info");
 
     super.dispose();
   }
