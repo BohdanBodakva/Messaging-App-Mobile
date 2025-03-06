@@ -86,6 +86,8 @@ class NewGroupPageState extends State<NewGroupPage> {
         final groupUsersIds = group.users!.map((u) => u.id).toList();
 
         if (group.adminId == widget.currentUser!.id) {
+          widget.socket.emit("load_user", {"user_id": widget.currentUser!.id});
+
           showSuccessToast(
             context, 
             Provider.of<LanguageProvider>(context, listen: false).localizedStrings["userInfoChangedSuccessfully"] ?? "Info was changed successfully"
@@ -410,7 +412,9 @@ class NewGroupPageState extends State<NewGroupPage> {
                                 children: [
                                   CircleAvatar(
                                     radius: 25,
-                                    backgroundImage: AssetImage(user.profilePhotoLink!),
+                                    backgroundImage: user.profilePhotoLink != null && !user.profilePhotoLink!.contains("assets/letter_images")
+                                      ? NetworkImage(user.profilePhotoLink!)  as ImageProvider<Object>
+                                      : AssetImage(user.profilePhotoLink ?? "assets/letter_images/u.png") as ImageProvider<Object>,
                                   ),
                                   const SizedBox(height: 5),
                                   Text(
@@ -491,7 +495,9 @@ class NewGroupPageState extends State<NewGroupPage> {
 
         return Chip(
           avatar: CircleAvatar(
-            backgroundImage: AssetImage(user.profilePhotoLink!),
+            backgroundImage: user.profilePhotoLink != null && !user.profilePhotoLink!.contains("assets/letter_images")
+              ? NetworkImage(user.profilePhotoLink!)  as ImageProvider<Object>
+              : AssetImage(user.profilePhotoLink ?? "assets/letter_images/u.png") as ImageProvider<Object>,
           ),
           label: Text(user.username!),
           deleteIcon: !isCurrentUser && ((isAdmin && isEditing) ||(!isAdmin && !isEditing)) ? const Icon(Icons.close, size: 16) : null,

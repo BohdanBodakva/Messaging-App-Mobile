@@ -647,7 +647,9 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
                   },
                   child: CircleAvatar(
                     radius: 20,
-                    backgroundImage: AssetImage(currentUser?.profilePhotoLink ?? "assets/letter_images/u.png"),
+                    backgroundImage: currentUser?.profilePhotoLink != null && !currentUser!.profilePhotoLink!.contains("assets/letter_images") 
+                      ? NetworkImage(currentUser!.profilePhotoLink!) as ImageProvider<Object>
+                      : AssetImage(currentUser?.profilePhotoLink ?? "assets/letter_images/u.png") as ImageProvider<Object>,
                   ),
                 ),
               ],
@@ -773,7 +775,10 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
                                     children: [
                                       CircleAvatar(
                                         radius: 25,
-                                        backgroundImage: AssetImage(user.profilePhotoLink ?? "assets/letter_images/u.png"),
+                                        // backgroundImage: AssetImage(user.profilePhotoLink ?? "assets/letter_images/u.png"),
+                                        backgroundImage: user.profilePhotoLink != null && !user.profilePhotoLink!.contains("assets/letter_images") 
+                                          ? NetworkImage(user.profilePhotoLink!) as ImageProvider<Object>
+                                          : AssetImage(user.profilePhotoLink!) as ImageProvider<Object>,
                                       ),
                                       const SizedBox(height: 5),
                                       Text(
@@ -859,8 +864,6 @@ class ChatItem extends StatelessWidget {
     List<User>? otherUsers = chat!.users!.where((user) => user.id != currentUser!.id).toList();
     String chatName = chat!.isGroup == true ? chat!.name! : "${otherUsers[0].name!} ${otherUsers[0].surname!}";
 
-    print("USER HAS UNREAD MESSAGES");
-
     String lastmessageText = "";
     if (chat!.messages!.isNotEmpty) {
       lastmessageText = chat!.messages![0].text!;
@@ -874,9 +877,13 @@ class ChatItem extends StatelessWidget {
     return ListTile(
       leading: CircleAvatar(
         radius: 30,
-        backgroundImage: AssetImage(
-          chat!.isGroup == true ? chat!.chatPhotoLink! : otherUsers[0].profilePhotoLink!
-        ),
+        backgroundImage: chat!.isGroup == true 
+          ? (chat?.chatPhotoLink != null && !chat!.chatPhotoLink!.contains("assets/letter_images") 
+              ? NetworkImage(chat!.chatPhotoLink!) as ImageProvider<Object>
+              : AssetImage(chat?.chatPhotoLink ?? "assets/letter_images/g.png") as ImageProvider<Object>)
+          : (otherUsers[0].profilePhotoLink != null && !otherUsers[0].profilePhotoLink!.contains("assets/letter_images") 
+              ? NetworkImage(otherUsers[0].profilePhotoLink!) as ImageProvider<Object>
+              : AssetImage(otherUsers[0].profilePhotoLink ?? "assets/letter_images/u.png") as ImageProvider<Object>),
       ),
       title: Row(
         children: [
@@ -925,8 +932,9 @@ class ChatItem extends StatelessWidget {
                 lastmessageSendTime ?? "",
                 style: const TextStyle(fontSize: 12, color: Colors.grey),
               ),
-              if (currentUser!.unreadMessages!.map((m) => m.id).toList().any(
-                (el) => chat!.messages!.map((m) => m.id).toList().contains(el)
+              if (currentUser!.unreadMessages!.where((m) => !m.isHidden).map((m) => m.id).toList().any(
+                (el) => chat!.messages!.map((m) => m.id).toList().contains(el) 
+                && currentUser!.unreadMessages!.where((m) => m.id == el).toList()[0].usersThatUnread.map((u) => u.id).contains(currentUser!.id)
               ))
                 Padding(
                   padding: const EdgeInsets.only(left: 8),

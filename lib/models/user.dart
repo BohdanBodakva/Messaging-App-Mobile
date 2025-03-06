@@ -1,6 +1,7 @@
 import 'dart:ffi';
 
 import 'package:messaging_app/models/chat.dart';
+import 'package:messaging_app/models/message.dart';
 
 class User {
   int? id;
@@ -37,7 +38,9 @@ class User {
       profilePhotoLink: json['profile_photo_link'],
       isOnline: json['is_online'],
       chats: [],
-      unreadMessages: json['unread_messages'] ?? [],
+      unreadMessages: (json['unread_messages'] as List<dynamic>?)
+          ?.map((m) => Message.fromJson(m))
+          .toList() ?? [],
     );
 
     if (includeChats) {

@@ -54,10 +54,11 @@ class ChatPageState extends State<ChatPage> {
       currentChat = widget.chat.deepCopy();
     });
 
+    debugPrint("P{P{P{P{P{P{P{}}}}}}}: ${currentChat!.chatPhotoLink} ${currentChat!.id}");
+
     isGroup = currentChat!.isGroup!;
     otherUsers = currentChat!.users!.where((user) => user.id != currentUserChatPage!.id).toList();
 
-    // chatName = currentChat!.isGroup == true ? currentChat!.name! : otherUsers![0].name!;
     if (isGroup) {
       chatName = currentChat!.name!;
     } else {
@@ -397,9 +398,9 @@ class ChatPageState extends State<ChatPage> {
               margin: const EdgeInsets.only(right: 14.0),
               child: CircleAvatar(
                 radius: 20,
-                backgroundImage: AssetImage(
-                  isGroup ? currentChat!.chatPhotoLink! : otherUsers![0].profilePhotoLink!
-                ),
+                backgroundImage: widget.chat.users![0].profilePhotoLink != null && !widget.chat.users![0].profilePhotoLink!.contains("assets/letter_images")
+                  ? NetworkImage(widget.chat.users![0].profilePhotoLink!)  as ImageProvider<Object>
+                  : AssetImage(widget.chat.users?[0].profilePhotoLink ?? "assets/letter_images/u.png") as ImageProvider<Object>,
               ),
             )
           )
@@ -425,16 +426,38 @@ class ChatPageState extends State<ChatPage> {
                       final prevMessageId = index > 0 ? chatHistory[index - 1].id : null;
                       final currMessageId = chatHistory[index].id;
 
-                      final unreadMessages = currentUserChatPage!.unreadMessages!;
+                      final unreadMessagesIds = currentUserChatPage!.unreadMessages!.map((m) => m.id).toList();
 
                       return Column (
                         children: [
-                          if (prevMessageId != null && unreadMessages.contains(currMessageId) && !unreadMessages.contains(prevMessageId))
-                            const Divider(
-                              color: Colors.blue,
-                              thickness: 3,
-                              indent: 10,
-                              endIndent: 10,
+                          if (prevMessageId != null && unreadMessagesIds.contains(currMessageId) && !unreadMessagesIds.contains(prevMessageId))
+                            Row(
+                              children: [
+                                const Expanded(
+                                  child: Divider(
+                                    color: Colors.blue,
+                                    thickness: 1,
+                                    indent: 25,
+                                    endIndent: 10,
+                                  ),
+                                ),
+                                Text(
+                                  languageProvider.localizedStrings["new"] ?? "New",
+                                  style: const TextStyle(
+                                    fontSize: 14, 
+                                    fontWeight: FontWeight.w200,
+                                    color: Colors.blue
+                                  ),
+                                ),
+                                const Expanded(
+                                  child: Divider(
+                                    color: Colors.blue,
+                                    thickness: 1,
+                                    indent: 10,
+                                    endIndent: 25,
+                                  ),
+                                ),
+                              ],
                             ),
                           ChatMessageItem(
                             index: chatHistory[index].id!,

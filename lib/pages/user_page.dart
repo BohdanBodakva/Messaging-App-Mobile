@@ -1,3 +1,7 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
@@ -81,6 +85,19 @@ class UserProfilePageState extends State<UserProfilePage> {
       );
     });
 
+    widget.socket.on("upload_user_image", (data) {
+      final imageUrl = data["image_url"];
+
+      User user = profileUser!;
+
+      user.profilePhotoLink = imageUrl;
+
+      widget.setCurrentUser(user);
+      setState(() {
+        profileUser = user;
+      });
+    });
+
     widget.socket.on("change_user_info_username_exists", (data) {
       setState(() {
         isUsernameExist = true;
@@ -93,16 +110,35 @@ class UserProfilePageState extends State<UserProfilePage> {
     
   }
 
-  Future<void> _pickImage() async {
-    final pickedFile = await _picker.pickImage(source: ImageSource.gallery);
-    if (pickedFile != null) {
-      setState(() {
-        _image = File(pickedFile.path);
-      });
-    }
+  Future<void> _pickImage(Socket socket) async {
+    final XFile? pickedFile = await _picker.pickImage(source: ImageSource.gallery);
+
+    if (pickedFile == null) return;
+
+    File imageFile = File(pickedFile.path);
+    setState(() {
+      _image = imageFile;
+    });
+
+    Uint8List imageBytes = await imageFile.readAsBytes();
+    String base64Image = base64Encode(imageBytes);
+
+    debugPrint("{{{{{{{{{{{{{{{{{{{}}}}}}}}}}}}}}}}}}}: ${pickedFile.name}");
+
+    socket.emit('upload_user_image', {
+      "user_id": widget.currentUser!.id,
+      "image": base64Image,
+      "filename": pickedFile.name
+    });
   }
 
-  void _logout(languageProvider) {
+  void _resetImage() {
+    setState(() {
+      _image = null;
+    });
+  }
+
+  void _logout(languageProvider, socket) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -113,21 +149,11 @@ class UserProfilePageState extends State<UserProfilePage> {
           ElevatedButton(onPressed: () async {
               await deleteDataFromStorage("accessToken");
 
-              Navigator.of(context, rootNavigator: true).push(
-                PageRouteBuilder(
-                  pageBuilder: (context, animation, secondaryAnimation) => const LoginPage(),
-                  transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                    const begin = Offset(-1.0, 0.0);
-                    const end = Offset.zero;
-                    const curve = Curves.easeInOut;
+              socket.emit("go_offline", {"user_id": profileUser!.id});
 
-                    var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
-                    var offsetAnimation = animation.drive(tween);
-
-                    return SlideTransition(position: offsetAnimation, child: child);
-                  },
-                )
-              );
+              Navigator.pop(context);
+              Navigator.pop(context);
+              Navigator.pop(context);
             }, 
             child: Text(languageProvider.localizedStrings['logout'] ?? "Logout")
           ),
@@ -282,7 +308,7 @@ class UserProfilePageState extends State<UserProfilePage> {
     );
   }
 
-  void saveUserInfo() {
+  void saveUserInfo(Socket socket) {
     setState(() {
       isUsernameExist = false;
       isLoading = true;
@@ -314,8 +340,7 @@ class UserProfilePageState extends State<UserProfilePage> {
         "user_id": profileUser!.id,
         "new_name": name,
         "new_surname": surname,
-        "new_username": username,
-        "new_profile_photo_link": null
+        "new_username": username
       });
     }
 
@@ -328,6 +353,7 @@ class UserProfilePageState extends State<UserProfilePage> {
   void dispose() {
     widget.socket.off("change_user_info");
     widget.socket.off("change_user_info_username_exists");
+    widget.socket.off("upload_user_image");
 
     super.dispose();
   }
@@ -343,7 +369,7 @@ class UserProfilePageState extends State<UserProfilePage> {
         centerTitle: true,
         leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => Navigator.of(context, rootNavigator: true).pop()),
         actions: [
-          IconButton(icon: const Icon(Icons.logout, color: Colors.red), onPressed: () {_logout(languageProvider);}),
+          IconButton(icon: const Icon(Icons.logout, color: Colors.red), onPressed: () {_logout(languageProvider, widget.socket);}),
         ],
       ),
       body: Stack(
@@ -354,11 +380,38 @@ class UserProfilePageState extends State<UserProfilePage> {
               child: Column(
                 children: [
                   GestureDetector(
-                    onTap: _pickImage,
+                    onTap: () => _pickImage(widget.socket),
                     child: CircleAvatar(
                       radius: 50,
-                      backgroundImage: AssetImage(profileUser!.profilePhotoLink!),
+                      backgroundImage: profileUser?.profilePhotoLink != null && !profileUser!.profilePhotoLink!.contains("assets/letter_images")
+                        ? NetworkImage(profileUser!.profilePhotoLink!)  as ImageProvider<Object>
+                        : AssetImage(profileUser?.profilePhotoLink ?? "assets/letter_images/u.png") as ImageProvider<Object>,
                     ),
+                  ),
+                  const SizedBox(
+                    height: 6,
+                  ),
+                  SizedBox(
+                    // bottom: 0,
+                    // right: 0,
+                    child: GestureDetector(
+                      onTap: _resetImage,
+                      child: Container(
+                        padding: const EdgeInsets.all(5),
+                        decoration: const BoxDecoration(
+                          color: Colors.grey,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.close,
+                          color: Colors.white,
+                          size: 12,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(
+                    height: 20,
                   ),
                   _buildTextField(_nameController, languageProvider.localizedStrings['name'] ?? "Name"),
                   _buildTextField(_surnameController, languageProvider.localizedStrings['surname'] ?? "Surname"),
@@ -366,7 +419,7 @@ class UserProfilePageState extends State<UserProfilePage> {
                   const SizedBox(height: 20),
                   SizedBox(
                     width: double.infinity,
-                    child: ElevatedButton(onPressed: saveUserInfo, child: Text(languageProvider.localizedStrings['save'] ?? "Save")),
+                    child: ElevatedButton(onPressed: () => saveUserInfo(widget.socket), child: Text(languageProvider.localizedStrings['save'] ?? "Save")),
                   ),
                   const SizedBox(height: 10),
                   ListTile(

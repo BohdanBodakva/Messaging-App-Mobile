@@ -57,7 +57,7 @@ class ChatInfoPageState extends State<ChatInfoPage> {
         centerTitle: true,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.of(context, rootNavigator: true).pop(),
+          onPressed: () => Navigator.pop(context),
         ),
       ),
       body: Padding(
@@ -66,7 +66,9 @@ class ChatInfoPageState extends State<ChatInfoPage> {
           children: [
             CircleAvatar(
               radius: 50,
-              backgroundImage: AssetImage(widget.isGroup ? "" : widget.users![0].profilePhotoLink!),
+              backgroundImage: widget.users![0].profilePhotoLink != null && !widget.users![0].profilePhotoLink!.contains("assets/letter_images")
+                ? NetworkImage(widget.users![0].profilePhotoLink!)  as ImageProvider<Object>
+                : AssetImage(widget.users![0].profilePhotoLink ?? "assets/letter_images/u.png") as ImageProvider<Object>,
             ),
             const SizedBox(height: 16),
             
@@ -84,9 +86,8 @@ class ChatInfoPageState extends State<ChatInfoPage> {
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: () async => {
-                    await _showDeleteChatDialog(context, widget.socket), 
-                    Navigator.pop(context),
-                    Navigator.pop(context),
+                    await _showDeleteChatDialog(widget.socket), 
+                    Navigator.pop(context)
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.red,
@@ -113,7 +114,7 @@ class ChatInfoPageState extends State<ChatInfoPage> {
     );
   }
 
-  Future<void> _showDeleteChatDialog(BuildContext context, Socket socket) async {
+  Future<void> _showDeleteChatDialog(Socket socket) async {
     var languageProvider = Provider.of<LanguageProvider>(context, listen: false);
 
     await showDialog(
@@ -123,7 +124,7 @@ class ChatInfoPageState extends State<ChatInfoPage> {
         content: Text(languageProvider.localizedStrings['deleteChatConfirmMessage'] ?? "Are you sure you want to delete this chat?"),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context, rootNavigator: true).pop(),
+            onPressed: () => Navigator.of(context).pop(),
             child: Text(languageProvider.localizedStrings['cancel'] ?? "Cancel"),
           ),
           ElevatedButton(
@@ -131,8 +132,6 @@ class ChatInfoPageState extends State<ChatInfoPage> {
               socket.emit("delete_chat", {
                 "chat_id": widget.chat.id
               });
-
-              Navigator.pop(context);
             },
             child: Text(languageProvider.localizedStrings['delete'] ?? "Delete"),
           ),

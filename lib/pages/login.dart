@@ -4,11 +4,11 @@ import 'package:messaging_app/handlers/shared_prefs.dart';
 import 'package:messaging_app/models/user.dart';
 import 'package:messaging_app/pages/chat_list.dart';
 import 'package:messaging_app/providers/language_provider.dart';
+import 'package:messaging_app/services/hash_service.dart';
 import 'package:messaging_app/widgets/error_message.dart';
 import 'package:provider/provider.dart';
 import 'dart:convert';
-
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:crypto/crypto.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key, User? currentUser, setCurrentUser});
@@ -319,6 +319,8 @@ class LoginForm extends StatelessWidget {
         const SizedBox(height: 20),
         ElevatedButton(
           onPressed: () async {
+            setError("");
+            setSuccessfulSignupMessage(false);
             setUsernameInputValid(true);
             setPasswordInputValid(true);
 
@@ -340,7 +342,7 @@ class LoginForm extends StatelessWidget {
               "/auth/login", 
               {
                 "username": username,
-                "password": password,
+                "password": hashString(password),
               },
               {}
             );
@@ -604,7 +606,7 @@ class SignUpForm extends StatelessWidget {
                 "name": name,
                 "surname": surname,
                 "username": username,
-                "password": password,
+                "password": hashString(password),
               },
               {}
             );
