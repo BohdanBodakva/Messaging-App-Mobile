@@ -157,26 +157,13 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
   }
 
   Future<void> _connectToSocket() async {
-
-    socket.on('validate_token_error', (data) {
+    Future navigateToLogin (data) async {
       socket.disconnect();
+      Navigator.pop(context);
+    }
 
-      Navigator.of(context, rootNavigator: true).push(
-        PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) => const LoginPage(),
-          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            const begin = Offset(1.0, 0.0);
-            const end = Offset.zero;
-            const curve = Curves.easeInOut;
-
-            var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
-            var offsetAnimation = animation.drive(tween);
-
-            return SlideTransition(position: offsetAnimation, child: child);
-          },
-        ),
-      );
-    });
+    socket.on('validate_token_error', navigateToLogin);
+    socket.on('load_user_error', navigateToLogin);
 
     socket.on('validate_token', (data) {
       final newUserId = int.parse(data['user_id'].toString());
@@ -565,6 +552,7 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
       socket.off("change_user_info_for_chat_list");
       socket.off("create_chat");
       socket.off("create_group_chat_list");
+      socket.off("load_user_error");
 
       if (!socket.connected) {
         socket.connect();
@@ -599,6 +587,7 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
     socket.off("change_user_info_for_chat_list");
     socket.off("create_chat");
     socket.off("create_group_chat_list");
+    socket.off("load_user_error");
 
     if (socket.connected) {
       socket.disconnect();
@@ -624,6 +613,9 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
         Scaffold(
           appBar: AppBar(
             backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+            leadingWidth: 100,
+            automaticallyImplyLeading: false,
+            centerTitle: true,
             title: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -654,33 +646,70 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
                 ),
               ],
             ),
-            leading: IconButton(
-              icon: const Icon(Icons.group_add),
-              onPressed: () {
-                Navigator.of(context, rootNavigator: true).push(
-                  PageRouteBuilder(
-                    pageBuilder: (context, animation, secondaryAnimation) => NewGroupPage(
-                                                            socket: socket, 
-                                                            currentUser: currentUser, 
-                                                            setCurrentUser: setCurrentUser, 
-                                                            isEditing: false, 
-                                                            group: Chat(name: "", createdAt: DateTime.now(), isGroup: true), 
-                                                            openGroupChat: openGroupChat),
-                    transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                      const begin = Offset(-1.0, 0.0);
-                      const end = Offset.zero;
-                      const curve = Curves.easeInOut;
+            leading: Row(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.group_add),
+                  onPressed: () {
+                    Navigator.of(context, rootNavigator: true).push(
+                      PageRouteBuilder(
+                        pageBuilder: (context, animation, secondaryAnimation) => NewGroupPage(
+                          socket: socket, 
+                          currentUser: currentUser, 
+                          setCurrentUser: setCurrentUser, 
+                          isEditing: false, 
+                          group: Chat(name: "", createdAt: DateTime.now(), isGroup: true), 
+                          openGroupChat: openGroupChat),
+                        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                          const begin = Offset(-1.0, 0.0);
+                          const end = Offset.zero;
+                          const curve = Curves.easeInOut;
 
-                      var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
-                      var offsetAnimation = animation.drive(tween);
+                          var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+                          var offsetAnimation = animation.drive(tween);
 
-                      return SlideTransition(position: offsetAnimation, child: child);
-                    },
-                  ),
-                );
-              },
+                          return SlideTransition(position: offsetAnimation, child: child);
+                        },
+                      ),
+                    );
+                  },
+                ),
+                IconButton(
+                  icon: const Icon(Icons.memory),
+                  onPressed: () {
+                    Navigator.of(context, rootNavigator: true).push(
+                      PageRouteBuilder(
+                        pageBuilder: (context, animation, secondaryAnimation) => ChatPage(
+                          socket: socket, 
+                          chat: currentUser!.chats!.where((c) => c.users.length == 2 && 
+                            c.users.map((c1) => c1.id).toList().contains(currentUser!.id) &&
+                            c.users.map((c1) => c1.id).toList().contains(1))
+                          .toList()[0], 
+                          currentUser: currentUser, 
+                          setCurrentUser: setCurrentUser,
+                          chatWithAI: true
+                        ),
+                        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                          const begin = Offset(-1.0, 0.0);
+                          const end = Offset.zero;
+                          const curve = Curves.easeInOut;
+
+                          var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+                          var offsetAnimation = animation.drive(tween);
+
+                          return SlideTransition(position: offsetAnimation, child: child);
+                        },
+                      ),
+                    );
+                  },
+                ),
+              ],
             ),
             actions: [
+              const IconButton(
+                icon: Icon(Icons.clear, color: Colors.transparent,),
+                onPressed: null,
+              ),
               IconButton(
                 icon: const Icon(Icons.settings),
                 onPressed: () {
@@ -702,7 +731,6 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
                 },
               ),
             ],
-            centerTitle: true,
           ),
           body: Stack(
             children: [
@@ -802,6 +830,10 @@ class ChatListPageState extends State<ChatListPage> with WidgetsBindingObserver 
                       itemCount: currentUser?.chats?.length ?? 0,
                       itemBuilder: (context, index) {
                         final Chat chat = currentUser?.chats?[index];
+
+                        if(chat.users!.map((u) => u.id).toList().contains(1)) {
+                          return const SizedBox.shrink();
+                        }
 
                         return GestureDetector(
                           behavior: HitTestBehavior.translucent,

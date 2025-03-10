@@ -16,8 +16,9 @@ class ChatPage extends StatefulWidget {
   User? currentUser;
   Function setCurrentUser;
   Socket socket;
+  bool chatWithAI;
 
-  ChatPage({super.key, required this.socket, required this.chat, required this.currentUser, required this.setCurrentUser});
+  ChatPage({super.key, required this.socket, required this.chat, required this.currentUser, required this.setCurrentUser, this.chatWithAI=false});
 
   @override
   ChatPageState createState() => ChatPageState();
@@ -38,6 +39,13 @@ class ChatPageState extends State<ChatPage> {
   int loadHistoryOffset = 0;
   bool isChatHistoryEnded = false;
 
+  clearChatHistory() {
+    setState(() {
+      chatHistory = [];
+      loadHistoryOffset = 0;
+    });
+  }
+
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
 
@@ -45,16 +53,30 @@ class ChatPageState extends State<ChatPage> {
   late List<User>? otherUsers;
   late String chatName;
 
+  void _onScroll() {
+  if (_scrollController.position.pixels <= 0) {    
+    widget.socket.emit("load_chat_history", {
+      "chat_id": widget.chat.id,
+      "items_count": itemsCount,
+      "offset": loadHistoryOffset
+    });
+  }
+}
+
   @override
   void initState() {
     super.initState();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+    });
+
+    _scrollController.addListener(_onScroll);
 
     setState(() {
       currentUserChatPage = widget.currentUser!.deepCopy();
       currentChat = widget.chat.deepCopy();
     });
-
-    debugPrint("P{P{P{P{P{P{P{}}}}}}}: ${currentChat!.chatPhotoLink} ${currentChat!.id}");
 
     isGroup = currentChat!.isGroup!;
     otherUsers = currentChat!.users!.where((user) => user.id != currentUserChatPage!.id).toList();
@@ -82,7 +104,7 @@ class ChatPageState extends State<ChatPage> {
       if (!mounted) return;
 
       setState(() {
-        chatHistory = [...chatHistory, ...history];
+        chatHistory = [...history, ...chatHistory];
       });
 
       if (isLoading) {
@@ -231,13 +253,22 @@ class ChatPageState extends State<ChatPage> {
     if (_messageController.text.isNotEmpty) {
       String messageText = _messageController.text.trim();
 
-      widget.socket.emit("send_message", {
-        "text": messageText,
-        "sent_at": DateTime.now().toIso8601String(),
-        "sent_files": [],
-        "user_id": currentUserChatPage!.id,
-        "room": currentChat!.id
-      });
+      if (widget.chatWithAI) {
+        widget.socket.emit("ai_chat", {
+          "prompt": messageText,
+          "sent_at": DateTime.now().toIso8601String(),
+          "user_id": currentUserChatPage!.id,
+          "chat_id": currentChat!.id
+        }); 
+      } else {
+        widget.socket.emit("send_message", {
+          "text": messageText,
+          "sent_at": DateTime.now().toIso8601String(),
+          "sent_files": [],
+          "user_id": currentUserChatPage!.id,
+          "room": currentChat!.id
+        });
+      }
 
       _messageController.clear();
       _scrollToBottom();
@@ -268,6 +299,8 @@ class ChatPageState extends State<ChatPage> {
     widget.socket.off("leave_group_from_chat_area");
     widget.socket.off("user_typing");
 
+    _scrollController.removeListener(_onScroll);
+    _scrollController.removeListener(_scrollToBottom);
     _scrollController.dispose();
     super.dispose();
   }
@@ -302,7 +335,7 @@ class ChatPageState extends State<ChatPage> {
                         socket: widget.socket, currentUser: widget.currentUser, setCurrentUser: widget.setCurrentUser, isEditing: true, group: widget.chat, openGroupChat: (){},
                       ) :
                       ChatInfoPage(
-                        socket: widget.socket, isGroup: isGroup, users: otherUsers, chat: currentChat!,
+                        socket: widget.socket, isGroup: isGroup, users: otherUsers, chat: currentChat!, clearChatHistory: clearChatHistory, chatWithAI: widget.chatWithAI
                       ),
                     transitionsBuilder: (context, animation, secondaryAnimation, child) {
                       const begin = Offset(1.0, 0.0);
@@ -379,7 +412,7 @@ class ChatPageState extends State<ChatPage> {
                       socket: widget.socket, currentUser: widget.currentUser, setCurrentUser: widget.setCurrentUser, isEditing: true, group: widget.chat, openGroupChat: (){},
                     ) :
                     ChatInfoPage(
-                      socket: widget.socket, isGroup: isGroup, users: otherUsers, chat: currentChat!,
+                      socket: widget.socket, isGroup: isGroup, users: otherUsers, chat: currentChat!, clearChatHistory: clearChatHistory, chatWithAI: widget.chatWithAI
                     ),
                   transitionsBuilder: (context, animation, secondaryAnimation, child) {
                     const begin = Offset(1.0, 0.0);
@@ -398,9 +431,9 @@ class ChatPageState extends State<ChatPage> {
               margin: const EdgeInsets.only(right: 14.0),
               child: CircleAvatar(
                 radius: 20,
-                backgroundImage: widget.chat.users![0].profilePhotoLink != null && !widget.chat.users![0].profilePhotoLink!.contains("assets/letter_images")
-                  ? NetworkImage(widget.chat.users![0].profilePhotoLink!)  as ImageProvider<Object>
-                  : AssetImage(widget.chat.users?[0].profilePhotoLink ?? "assets/letter_images/u.png") as ImageProvider<Object>,
+                backgroundImage: otherUsers![0].profilePhotoLink != null && !otherUsers![0].profilePhotoLink!.contains("assets/letter_images")
+                  ? NetworkImage(otherUsers![0].profilePhotoLink!)  as ImageProvider<Object>
+                  : AssetImage(otherUsers?[0].profilePhotoLink ?? "assets/letter_images/u.png") as ImageProvider<Object>,
               ),
             )
           )
@@ -469,9 +502,11 @@ class ChatPageState extends State<ChatPage> {
                             onDelete: () => _deleteMessage(chatHistory[index].id!),
                             onLongPress: () {
                               if (chatHistory[index].userId! == currentUserChatPage!.id) {
-                                setState(() {
-                                  _selectedDeleteIndex = chatHistory[index].id!;
-                                });
+                                if (!widget.chatWithAI) {
+                                  setState(() {
+                                    _selectedDeleteIndex = chatHistory[index].id!;
+                                  });
+                                }
                               }
                             },
                           )
@@ -484,14 +519,11 @@ class ChatPageState extends State<ChatPage> {
                   padding: const EdgeInsets.all(8.0),
                   child: Row(
                     children: [
-                      IconButton(
-                        icon: const Icon(Icons.attach_file),
-                        onPressed: _pickFile,
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.image),
-                        onPressed: _pickImage,
-                      ),
+                      if (!widget.chatWithAI)
+                        IconButton(
+                          icon: const Icon(Icons.image),
+                          onPressed: _pickImage,
+                        ),
                       Expanded(
                         child: TextField(
                           controller: _messageController,

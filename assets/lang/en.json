@@ -55,5 +55,8 @@
     "leaveGroup": "Leave group",
     "groupUsers": "Users",
     "typing": "Typing",
-    "isTyping": "is typing"
+    "isTyping": "is typing",
+    "clearChatHistory": "Clear Chat History",
+    "clearChatHistoryConfrimMessage": "Are you sure you want to clear chat history?",
+    "clear": "Clear"
 }

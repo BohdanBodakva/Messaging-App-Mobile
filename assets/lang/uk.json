@@ -55,5 +55,8 @@
     "leaveGroup": "Покинути групу",
     "groupUsers": "Користувачі",
     "typing": "Пише",
-    "isTyping": "пише"
+    "isTyping": "пише",
+    "clearChatHistory": "Видалити історію чату",
+    "clearChatHistoryConfrimMessage": "Ви справді хочете очистити історію чату?",
+    "clear": "Очистити"
 }
